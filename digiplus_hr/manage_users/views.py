@@ -9,15 +9,15 @@ from .serializers import (
     UpdateEmployeSerializer,
     PosteSerializer
 )
-from .permissions import IsAdmin, IsAdminOrHR
+from .permissions import IsAdmin, IsSuperAdmin
 
 class PosteViewSet(viewsets.ModelViewSet):
     queryset = Poste.objects.all()
     serializer_class = PosteSerializer
-    permission_classes = [IsAdminOrHR]
+    permission_classes = [IsAdmin]
 
 class EmployeViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAdminOrHR]
+    permission_classes = [IsAdmin]
     
     def get_queryset(self):
         return Employe.objects.select_related('user', 'poste').all()
@@ -61,7 +61,7 @@ class EmployeViewSet(viewsets.ModelViewSet):
         
         return Response(status=status.HTTP_204_NO_CONTENT)
     
-    @action(detail=True, methods=['post'], permission_classes=[IsAdmin])
+    @action(detail=True, methods=['post'], permission_classes=[IsSuperAdmin])
     def activate(self, request, pk=None):
         employe = self.get_object()
         user = employe.user

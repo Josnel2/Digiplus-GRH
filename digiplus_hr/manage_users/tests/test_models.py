@@ -1,71 +1,77 @@
-import pytest
+from django.test import TestCase
 from django.db import IntegrityError
 from django.contrib.auth import get_user_model
 from manage_users.models import User, Poste, Employe
-from django.utils import timezone
 
 User = get_user_model()
 
-class TestUserModel:
+class TestUserModel(TestCase):
     """Tests for User model"""
+    
+    def setUp(self):
+        """Set up test data"""
+        self.user_data = {
+            'email': 'test@digiplus.com',
+            'password': 'testpass123',
+            'first_name': 'Test',
+            'last_name': 'User'
+        }
     
     def test_create_user(self):
         """Test creating a normal user"""
-        user = User.objects.create_user(
-            email='test@digiplus.com',
-            password='testpass123',
-            first_name='Test',
-            last_name='User'
-        )
+        user = User.objects.create_user(**self.user_data)
         
-        assert user.email == 'test@digiplus.com'
-        assert user.first_name == 'Test'
-        assert user.last_name == 'User'
-        assert user.role == 'employee'
-        assert user.check_password('testpass123')
-        assert user.is_active is True
-        assert user.is_staff is False
-        assert user.is_superuser is False
+        self.assertEqual(user.email, 'test@digiplus.com')
+        self.assertEqual(user.first_name, 'Test')
+        self.assertEqual(user.last_name, 'User')
+        self.assertEqual(user.role, 'employee')
+        self.assertTrue(user.check_password('testpass123'))
+        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
     
     def test_create_superuser(self):
         """Test creating a superuser"""
         superuser = User.objects.create_superuser(
-            email='admin@digiplus.com',
-            password='adminpass123'
+            email='superadmin@digiplus.com',
+            password='superpass123'
         )
         
-        assert superuser.email == 'admin@digiplus.com'
-        assert superuser.role == 'admin'
-        assert superuser.is_staff is True
-        assert superuser.is_superuser is True
+        self.assertEqual(superuser.email, 'superadmin@digiplus.com')
+        self.assertEqual(superuser.role, 'superadmin')
+        self.assertTrue(superuser.is_staff)
+        self.assertTrue(superuser.is_superuser)
+    
+    def test_create_admin_user(self):
+        """Test creating an admin user"""
+        admin_user = User.objects.create_user(
+            email='admin@digiplus.com',
+            password='adminpass123',
+            first_name='Admin',
+            last_name='User',
+            role='admin'
+        )
+        
+        self.assertEqual(admin_user.role, 'admin')
+        self.assertFalse(admin_user.is_staff)
+        self.assertFalse(admin_user.is_superuser)
     
     def test_user_str_representation(self):
         """Test user string representation"""
-        user = User.objects.create_user(
-            email='test@digiplus.com',
-            password='testpass123',
-            first_name='John',
-            last_name='Doe'
-        )
+        user = User.objects.create_user(**self.user_data)
         
-        assert str(user) == 'John Doe (test@digiplus.com)'
+        self.assertEqual(str(user), 'Test User (test@digiplus.com)')
     
     def test_unique_email_constraint(self):
         """Test that email must be unique"""
-        User.objects.create_user(
-            email='duplicate@digiplus.com',
-            password='testpass123'
-        )
+        User.objects.create_user(**self.user_data)
         
-        with pytest.raises(IntegrityError):
-            User.objects.create_user(
-                email='duplicate@digiplus.com',
-                password='testpass123'
-            )
+        with self.assertRaises(IntegrityError):
+            User.objects.create_user(**self.user_data)
     
     def test_user_required_fields(self):
         """Test user required fields"""
-        with pytest.raises(ValueError):
+        with self.assertRaises(ValueError):
             User.objects.create_user(email='', password='testpass123')
 
 class TestPosteModel:
