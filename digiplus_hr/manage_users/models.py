@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils import timezone
+from datetime import timedelta
+import random
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -13,29 +15,27 @@ class CustomUserManager(BaseUserManager):
         return user
 
     def create_superuser(self, email, password=None, **extra_fields):
+        extra_fields.setdefault('is_superadmin', True)
+        extra_fields.setdefault('is_admin', False)
+        extra_fields.setdefault('is_employe', False)
+        extra_fields.setdefault('is_verified', True)
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('role', 'superadmin')
         
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True.')
-            
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractUser):
-    ROLE_CHOICES = [
-        ('superadmin', 'Super Administrateur'),
-        ('admin', 'Administrateur'),
-        ('employee', 'Employé'),
-    ]
-    
     username = None  # Remove username field
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
+    
+    # Roles
+    is_superadmin = models.BooleanField(default=False)
+    is_admin = models.BooleanField(default=False)
+    is_employe = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=False)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -46,6 +46,36 @@ class User(AbstractUser):
     
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"
+    
+    @property
+    def role(self):
+        if self.is_superadmin:
+            return 'superadmin'
+        elif self.is_admin:
+            return 'admin'
+        else:
+            return 'employe'
+
+class OTP(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otps')
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+    
+    def is_valid(self):
+        from django.conf import settings
+        expiry_time = self.created_at + timedelta(minutes=getattr(settings, 'OTP_EXPIRY_MINUTES', 5))
+        return timezone.now() < expiry_time and not self.is_used
+    
+    @staticmethod
+    def generate_code():
+        return str(random.randint(100000, 999999))
+    
+    def __str__(self):
+        return f"OTP for {self.user.email} - {self.code}"
+    
+    class Meta:
+        ordering = ['-created_at']
 
 class Poste(models.Model):
     titre = models.CharField(max_length=100)
