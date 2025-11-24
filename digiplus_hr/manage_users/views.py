@@ -5,7 +5,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
-from .models import OTP, Poste, Employe
+from .models import OTP, Poste, Employe, DemandeConge, Notification
+from rest_framework import generics, permissions
+from .serializers import DemandeCongeSerializer, NotificationSerializer
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from .serializers import (
     # Authentication
     LoginSerializer, VerifyOTPSerializer, ResendOTPSerializer, ChangePasswordSerializer,
@@ -14,7 +18,7 @@ from .serializers import (
     # Admin Management
     SuperAdminCreateSerializer, AdminCreateSerializer, EmployeCreateSerializer, UserListSerializer,
     # Postes and Employes
-    PosteSerializer, EmployeSerializer
+    PosteSerializer, EmployeSerializer,DemandeCongeSerializer, NotificationSerializer
 )
 from .permissions import IsSuperAdmin, IsAdmin, IsAdminOrSuperAdmin, IsVerified
 from .utils import send_otp_email, send_credentials_email
@@ -444,3 +448,61 @@ class EmployeProfileViewSet(viewsets.ModelViewSet):
                 {'error': 'Profil employé non trouvé'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+channel_layer = get_channel_layer()
+
+# ----------------------
+# Vues Demande de congé
+# ----------------------
+class DemandeCongeListCreateView(generics.ListCreateAPIView):
+    serializer_class = DemandeCongeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        # L'employé voit seulement ses demandes
+        return DemandeConge.objects.filter(employe__user=self.request.user)
+
+    def perform_create(self, serializer):
+        conge = serializer.save(employe=self.request.user.employe)
+        # Envoi notification instantanée à l'admin ou superadmin
+        async_to_sync(channel_layer.group_send)(
+            "admins",  # Groupe admin (on créera le groupe dans le front/consumer)
+            {
+                "type": "send_notification",
+                "content": {
+                    "titre": "Nouvelle demande de congé",
+                    "message": f"{conge.employe.user.get_full_name()} a demandé un {conge.type_conge} du {conge.date_debut} au {conge.date_fin}.",
+                    "demande_id": conge.id,
+                    "statut": conge.statut
+                }
+            }
+        )
+
+class DemandeCongeDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = DemandeConge.objects.all()
+    serializer_class = DemandeCongeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_update(self, serializer):
+        old_instance = self.get_object()
+        conge = serializer.save()
+        # Si le statut a changé, notifier l'employé
+        if old_instance.statut != conge.statut:
+            async_to_sync(channel_layer.group_send)(
+                f"user_{conge.employe.user.id}",
+                {
+                    "type": "send_notification",
+                    "content": {
+                        "titre": f"Demande {conge.statut}",
+                        "message": f"Votre demande du {conge.date_debut} au {conge.date_fin} a été {conge.statut}."
+                    }
+                }
+            )
+
+class NotificationListView(generics.ListAPIView):
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Notification.objects.filter(demande_conge__employe__user=self.request.user).order_by('-date_envoi')

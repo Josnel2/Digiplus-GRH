@@ -108,3 +108,63 @@ class Employe(models.Model):
     
     def __str__(self):
         return f"{self.matricule} - {self.user.get_full_name()}"
+    
+class DemandeConge(models.Model):
+    STATUT_CHOICES = [
+        ('en_attente', 'En attente'),
+        ('approuve', 'Approuvé'),
+        ('rejete', 'Rejeté'),
+    ]
+
+    TYPE_CONGE_CHOICES = [
+        ('annuel', 'Congé annuel'),
+        ('maladie', 'Congé maladie'),
+        ('sans_solde', 'Congé sans solde'),
+    ]
+
+    employe = models.ForeignKey('Employe', on_delete=models.CASCADE, related_name='demandes_conge')
+    type_conge = models.CharField(max_length=50, choices=TYPE_CONGE_CHOICES)
+    date_debut = models.DateField()
+    date_fin = models.DateField()
+    description = models.TextField(blank=True, null=True)  # <-- Nouveau champ
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='en_attente')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def approuver(self):
+        self.statut = 'approuve'
+        self.save()
+        Notification.objects.create(
+            demande_conge=self,
+            titre='Congé approuvé',
+            message=f'Votre demande de congé du {self.date_debut} au {self.date_fin} a été approuvée.'
+        )
+
+    def rejeter(self):
+        self.statut = 'rejete'
+        self.save()
+        Notification.objects.create(
+            demande_conge=self,
+            titre='Congé rejeté',
+            message=f'Votre demande de congé du {self.date_debut} au {self.date_fin} a été rejetée.'
+        )
+
+    def __str__(self):
+        return f"{self.employe.matricule} - {self.type_conge} ({self.statut})"
+    
+
+class Notification(models.Model):
+    demande_conge = models.ForeignKey(DemandeConge, on_delete=models.CASCADE, related_name='notifications')
+    titre = models.CharField(max_length=200)
+    message = models.TextField()
+    date_envoi = models.DateTimeField(auto_now_add=True)
+    lu = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Notification: {self.titre} pour {self.demande_conge.employe.matricule}"
+
+class Departement(models.Model):
+    poste = models.ForeignKey(Poste, on_delete=models.CASCADE, related_name='departements')
+    name = models.CharField(max_length=100)
+    description = models.TextField()
+    employes = models.OneToOneField(Employe, related_name='departements')

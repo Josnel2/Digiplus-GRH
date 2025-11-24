@@ -22,7 +22,12 @@ urlpatterns = [
     path('profile', views.get_profile_view, name='profile'),
     path('profile/update', views.update_profile_view, name='update_profile'),
     path('change-password', views.change_password_view, name='change_password'),
-    
+    # Demandes de congé et notifications
+    path('leaves/', views.DemandeCongeListCreateView.as_view(), name='demande-conge-list-create'),
+    path('leaves/<int:pk>/', views.DemandeCongeDetailView.as_view(), name='demande-conge-detail'),
+    path('notifications/', views.NotificationListView.as_view(), name='notifications-list'),
+
+
     # Routes de gestion (incluent les routers)
     path('management/', include(router.urls)),
 ]

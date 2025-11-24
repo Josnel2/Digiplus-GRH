@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from .models import OTP, Poste, Employe
+from .models import OTP, Poste, Employe, DemandeConge, Notification
 
 User = get_user_model()
 
@@ -175,3 +175,18 @@ class EmployeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employe
         fields = '__all__'
+
+    from rest_framework import serializers
+from .models import DemandeConge, Notification
+
+class DemandeCongeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DemandeConge
+        fields = '__all__'
+        read_only_fields = ['employe', 'statut', 'created_at', 'updated_at']
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
+        read_only_fields = ['demande_conge', 'date_envoi', 'lu']
