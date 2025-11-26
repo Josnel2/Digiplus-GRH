@@ -163,8 +163,3 @@ class Notification(models.Model):
     def __str__(self):
         return f"Notification: {self.titre} pour {self.demande_conge.employe.matricule}"
 
-class Departement(models.Model):
-    poste = models.ForeignKey(Poste, on_delete=models.CASCADE, related_name='departements')
-    name = models.CharField(max_length=100)
-    description = models.TextField()
-    employes = models.OneToOneField(Employe, related_name='departements')
