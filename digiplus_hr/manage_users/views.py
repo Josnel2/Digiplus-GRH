@@ -486,19 +486,42 @@ class DemandeCongeDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         old_instance = self.get_object()
-        conge = serializer.save()
-        # Si le statut a changé, notifier l'employé
-        if old_instance.statut != conge.statut:
-            async_to_sync(channel_layer.group_send)(
-                f"user_{conge.employe.user.id}",
-                {
-                    "type": "send_notification",
-                    "content": {
-                        "titre": f"Demande {conge.statut}",
-                        "message": f"Votre demande du {conge.date_debut} au {conge.date_fin} a été {conge.statut}."
-                    }
-                }
-            )
+        new_statut = serializer.validated_data.get('statut', old_instance.statut)
+        
+        # Extraire les champs additionnels modifiés (tous les champs du serializer sauf statut)
+        extra_fields = {k: v for k, v in serializer.validated_data.items() if k != 'statut'}
+        
+        # Si le statut change vers 'approuve' ou 'rejete', utiliser les méthodes du modèle
+        # pour garantir persistance de la Notification et envoi WebSocket cohérents.
+        if old_instance.statut != new_statut:
+            if new_statut == 'approuve':
+                old_instance.approuver(**extra_fields)
+                conge = old_instance
+            elif new_statut == 'rejete':
+                old_instance.rejeter(**extra_fields)
+                conge = old_instance
+            else:
+                # Pour d'autres statuts, sauvegarder normalement et envoyer une notification générique
+                conge = serializer.save()
+                try:
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_{conge.employe.user.id}",
+                        {
+                            "type": "send_notification",
+                            "content": {
+                                "titre": f"Demande {conge.statut}",
+                                "message": f"Votre demande du {conge.date_debut} au {conge.date_fin} a été {conge.statut}.",
+                                "demande_id": conge.id,
+                                "statut": conge.statut,
+                            }
+                        }
+                    )
+                except Exception:
+                    pass
+        else:
+            # Si statut ne change pas, sauvegarder les autres champs normalement
+            conge = serializer.save()
+
 
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
