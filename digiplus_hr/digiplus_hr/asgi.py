@@ -1,16 +1,16 @@
-"""
-ASGI config for digiplus_hr project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.2/howto/deployment/asgi/
-"""
-
 import os
-
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.auth import AuthMiddlewareStack
 from django.core.asgi import get_asgi_application
+import manage_users.routing  # On va créer ce fichier
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'digiplus_hr.settings')
 
-application = get_asgi_application()
+application = ProtocolTypeRouter({
+    "http": get_asgi_application(),  # HTTP classique
+    "websocket": AuthMiddlewareStack(
+        URLRouter(
+            manage_users.routing.websocket_urlpatterns
+        )
+    ),
+})
