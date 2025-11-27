@@ -3,6 +3,8 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils import timezone
 from datetime import timedelta
 import random
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -131,23 +133,79 @@ class DemandeConge(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def approuver(self):
+    def approuver(self, **extra_fields):
+        """Approuver la demande de congé et créer notification persistante + temps réel.
+        
+        Args:
+            **extra_fields: champs additionnels à mettre à jour (ex: description)
+        """
         self.statut = 'approuve'
+        for key, value in extra_fields.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
         self.save()
+        
         Notification.objects.create(
             demande_conge=self,
             titre='Congé approuvé',
             message=f'Votre demande de congé du {self.date_debut} au {self.date_fin} a été approuvée.'
         )
+        
+        # Envoi notification temps réel via Channels au propriétaire
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"user_{self.employe.user.id}",
+                {
+                    "type": "send_notification",
+                    "content": {
+                        "titre": "Congé approuvé",
+                        "message": f"Votre demande du {self.date_debut} au {self.date_fin} a été approuvée.",
+                        "demande_id": self.id,
+                        "statut": self.statut,
+                    }
+                }
+            )
+        except Exception:
+            # Ne pas faire échouer la logique principale si Channels n'est pas configuré
+            pass
 
-    def rejeter(self):
+    def rejeter(self, **extra_fields):
+        """Rejeter la demande de congé et créer notification persistante + temps réel.
+        
+        Args:
+            **extra_fields: champs additionnels à mettre à jour (ex: description)
+        """
         self.statut = 'rejete'
+        for key, value in extra_fields.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
         self.save()
+        
         Notification.objects.create(
             demande_conge=self,
             titre='Congé rejeté',
             message=f'Votre demande de congé du {self.date_debut} au {self.date_fin} a été rejetée.'
         )
+        
+        # Envoi notification temps réel via Channels au propriétaire
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"user_{self.employe.user.id}",
+                {
+                    "type": "send_notification",
+                    "content": {
+                        "titre": "Congé rejeté",
+                        "message": f"Votre demande du {self.date_debut} au {self.date_fin} a été rejetée.",
+                        "demande_id": self.id,
+                        "statut": self.statut,
+                    }
+                }
+            )
+        except Exception:
+            # Ne pas faire échouer la logique principale si Channels n'est pas configuré
+            pass
 
     def __str__(self):
         return f"{self.employe.matricule} - {self.type_conge} ({self.statut})"
