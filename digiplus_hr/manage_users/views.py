@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
-from .models import OTP, Poste, Employe, DemandeConge, Notification
+from .models import OTP, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit
 from rest_framework import generics, permissions
 from .serializers import DemandeCongeSerializer, NotificationSerializer
 from asgiref.sync import async_to_sync
@@ -495,15 +495,16 @@ class DemandeCongeDetailView(generics.RetrieveUpdateDestroyAPIView):
         # pour garantir persistance de la Notification et envoi WebSocket cohérents.
         if old_instance.statut != new_statut:
             if new_statut == 'approuve':
-                old_instance.approuver(**extra_fields)
+                old_instance.approuver(admin=self.request.user, **extra_fields)
                 conge = old_instance
             elif new_statut == 'rejete':
-                old_instance.rejeter(**extra_fields)
+                old_instance.rejeter(admin=self.request.user, **extra_fields)
                 conge = old_instance
             else:
                 # Pour d'autres statuts, sauvegarder normalement et envoyer une notification générique
                 conge = serializer.save()
                 try:
+                    channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
                         f"user_{conge.employe.user.id}",
                         {
@@ -529,3 +530,81 @@ class NotificationListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Notification.objects.filter(demande_conge__employe__user=self.request.user).order_by('-date_envoi')
+
+
+class AdminDemandesListView(generics.ListAPIView):
+    """
+    Endpoint pour les admins: voir TOUTES les demandes de congé
+    GET /api/management/demandes/
+    """
+    serializer_class = DemandeCongeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Seulement les admins peuvent voir toutes les demandes
+        if self.request.user.is_admin or self.request.user.is_superadmin:
+            # Optionnel: filtrer par statut si ?statut=en_attente
+            statut = self.request.query_params.get('statut', None)
+            if statut:
+                return DemandeConge.objects.filter(statut=statut).order_by('-created_at')
+            return DemandeConge.objects.all().order_by('-created_at')
+        
+        # Sinon, vide
+        return DemandeConge.objects.none()
+
+
+class EmployeDemandesListView(generics.ListAPIView):
+    """
+    Endpoint pour les employés: voir ses propres demandes de congé
+    GET /api/users/mes-demandes/
+    """
+    serializer_class = DemandeCongeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # L'employé voit seulement ses demandes
+        if hasattr(self.request.user, 'employe'):
+            return DemandeConge.objects.filter(employe__user=self.request.user).order_by('-created_at')
+        return DemandeConge.objects.none()
+
+
+class NotificationMarkAsReadView(generics.UpdateAPIView):
+    """
+    Endpoint pour marquer une notification comme lue
+    PATCH /api/notifications/{id}/mark-read/
+    """
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+    
+    def get_queryset(self):
+        # L'utilisateur peut marquer comme lue seulement ses propres notifications
+        return Notification.objects.filter(demande_conge__employe__user=self.request.user)
+    
+    def partial_update(self, request, *args, **kwargs):
+        notification = self.get_object()
+        notification.lu = True
+        notification.save()
+        
+        serializer = self.get_serializer(notification)
+        return Response({
+            'status': 'success',
+            'message': 'Notification marquée comme lue',
+            'notification': serializer.data
+        })
+
+
+class AdminAuditListView(generics.ListAPIView):
+    """
+    Endpoint pour voir l'historique des approbations/rejets
+    GET /api/management/audit/
+    """
+    from manage_users.serializers import DemandeCongeAuditSerializer
+    serializer_class = DemandeCongeAuditSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Seulement les admins peuvent voir l'audit
+        if self.request.user.is_admin or self.request.user.is_superadmin:
+            return DemandeCongeAudit.objects.all().order_by('-date_action')
+        return DemandeCongeAudit.objects.none()

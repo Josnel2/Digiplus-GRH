@@ -25,9 +25,12 @@ urlpatterns = [
     # Demandes de congé et notifications
     path('leaves/', views.DemandeCongeListCreateView.as_view(), name='demande-conge-list-create'),
     path('leaves/<int:pk>/', views.DemandeCongeDetailView.as_view(), name='demande-conge-detail'),
+    path('mes-demandes/', views.EmployeDemandesListView.as_view(), name='employe-demandes-list'),
     path('notifications/', views.NotificationListView.as_view(), name='notifications-list'),
-
+    path('notifications/<int:pk>/mark-read/', views.NotificationMarkAsReadView.as_view(), name='notification-mark-read'),
 
     # Routes de gestion (incluent les routers)
-    path('management/', include(router.urls)),
+    path('', include(router.urls)),
+    path('demandes/', views.AdminDemandesListView.as_view(), name='admin-demandes-list'),
+    path('audit/', views.AdminAuditListView.as_view(), name='admin-audit-list'),
 ]
