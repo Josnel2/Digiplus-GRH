@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from .models import OTP, Poste, Employe
+from .models import OTP, Poste, Employe, DemandeConge, Notification
 
 User = get_user_model()
 
@@ -175,3 +175,36 @@ class EmployeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Employe
         fields = '__all__'
+
+from rest_framework import serializers
+from .models import DemandeConge, Notification, DemandeCongeAudit
+
+class DemandeCongeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DemandeConge
+        fields = '__all__'
+        read_only_fields = ['employe', 'created_at', 'updated_at']
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
+        read_only_fields = ['demande_conge', 'date_envoi']
+
+class DemandeCongeAuditSerializer(serializers.ModelSerializer):
+    admin_name = serializers.CharField(source='admin.get_full_name', read_only=True)
+    demande_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DemandeCongeAudit
+        fields = ['id', 'demande_conge', 'demande_info', 'admin', 'admin_name', 'action', 'raison', 'date_action']
+        read_only_fields = ['id', 'date_action']
+    
+    def get_demande_info(self, obj):
+        return {
+            'id': obj.demande_conge.id,
+            'employe': obj.demande_conge.employe.user.get_full_name(),
+            'type': obj.demande_conge.type_conge,
+            'date_debut': obj.demande_conge.date_debut,
+            'date_fin': obj.demande_conge.date_fin,
+        }

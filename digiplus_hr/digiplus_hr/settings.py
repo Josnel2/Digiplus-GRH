@@ -40,6 +40,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'manage_users',
+    'channels',
+    
     # 'drf_yasg',
 ]
 
@@ -51,6 +53,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
 ]
 
 ROOT_URLCONF = 'digiplus_hr.urls'
@@ -83,6 +86,14 @@ DATABASES = {
     }
 }
 
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
 
 
 CORS_ALLOWED_ORIGINS = [
