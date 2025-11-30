@@ -2,7 +2,8 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from .models import OTP, Poste, Employe, DemandeConge, Notification
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit
+
 
 User = get_user_model()
 
@@ -160,13 +161,37 @@ class UserListSerializer(serializers.ModelSerializer):
         ]
 
 # ==============================
+# Departement Serializers
+# ==============================
+
+class DepartementSerializer(serializers.ModelSerializer):
+    chef_info = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = Departement
+        fields = ['id', 'nom', 'description', 'chef_departement', 'chef_info', 'created_at', 'updated_at']
+    
+    def get_chef_info(self, obj):
+        if obj.chef_departement:
+            return {
+                'id': obj.chef_departement.id,
+                'name': obj.chef_departement.user.get_full_name(),
+                'email': obj.chef_departement.user.email,
+                'matricule': obj.chef_departement.matricule,
+                'poste': obj.chef_departement.poste.titre if obj.chef_departement.poste else None
+            }
+        return None
+
+# ==============================
 # Poste Serializers
 # ==============================
 
 class PosteSerializer(serializers.ModelSerializer):
+    departement_details = DepartementSerializer(source='departement', read_only=True)
+    
     class Meta:
         model = Poste
-        fields = '__all__'
+        fields = ['id', 'titre', 'description', 'salaire_de_base', 'departement', 'departement_details', 'created_at', 'updated_at']
 
 class EmployeSerializer(serializers.ModelSerializer):
     user = UserProfileSerializer(read_only=True)
@@ -176,8 +201,6 @@ class EmployeSerializer(serializers.ModelSerializer):
         model = Employe
         fields = '__all__'
 
-from rest_framework import serializers
-from .models import DemandeConge, Notification, DemandeCongeAudit
 
 class DemandeCongeSerializer(serializers.ModelSerializer):
     class Meta:

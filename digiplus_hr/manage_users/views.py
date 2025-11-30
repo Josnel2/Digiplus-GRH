@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
-from .models import OTP, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit
 from rest_framework import generics, permissions
 from .serializers import DemandeCongeSerializer, NotificationSerializer
 from asgiref.sync import async_to_sync
@@ -18,7 +18,7 @@ from .serializers import (
     # Admin Management
     SuperAdminCreateSerializer, AdminCreateSerializer, EmployeCreateSerializer, UserListSerializer,
     # Postes and Employes
-    PosteSerializer, EmployeSerializer,DemandeCongeSerializer, NotificationSerializer
+    DepartementSerializer, PosteSerializer, EmployeSerializer, DemandeCongeSerializer, NotificationSerializer,DemandeCongeAuditSerializer
 )
 from .permissions import IsSuperAdmin, IsAdmin, IsAdminOrSuperAdmin, IsVerified
 from .utils import send_otp_email, send_credentials_email
@@ -410,15 +410,21 @@ class EmployeViewSet(viewsets.ModelViewSet):
             'user': UserListSerializer(employe).data
         })
 
-# ==============================
-# POSTE MANAGEMENT VIEWS
-# ==============================
+
+class DepartementViewSet(viewsets.ModelViewSet):
+    """
+    Gestion des départements
+    """
+    queryset = Departement.objects.all()
+    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    serializer_class = DepartementSerializer
+
 
 class PosteViewSet(viewsets.ModelViewSet):
     """
     Gestion des postes
     """
-    queryset = Poste.objects.all()
+    queryset = Poste.objects.select_related('departement').all()
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
     serializer_class = PosteSerializer
 
@@ -599,7 +605,7 @@ class AdminAuditListView(generics.ListAPIView):
     Endpoint pour voir l'historique des approbations/rejets
     GET /api/management/audit/
     """
-    from manage_users.serializers import DemandeCongeAuditSerializer
+   
     serializer_class = DemandeCongeAuditSerializer
     permission_classes = [permissions.IsAuthenticated]
     

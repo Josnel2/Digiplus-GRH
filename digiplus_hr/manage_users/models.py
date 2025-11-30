@@ -79,15 +79,32 @@ class OTP(models.Model):
     class Meta:
         ordering = ['-created_at']
 
-class Poste(models.Model):
-    titre = models.CharField(max_length=100)
+class Departement(models.Model):
+    nom = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
-    salaire_de_base = models.DecimalField(max_digits=10, decimal_places=2)
+    chef_departement = models.OneToOneField('Employe', on_delete=models.SET_NULL, null=True, blank=True, related_name='departement_manage')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return self.titre
+        return self.nom
+    
+    class Meta:
+        ordering = ['nom']
+
+class Poste(models.Model):
+    titre = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    salaire_de_base = models.DecimalField(max_digits=10, decimal_places=2)
+    departement = models.ForeignKey(Departement, on_delete=models.CASCADE, related_name='postes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.titre} ({self.departement.nom})"
+    
+    class Meta:
+        ordering = ['departement', 'titre']
 
 class Employe(models.Model):
     STATUT_CHOICES = [

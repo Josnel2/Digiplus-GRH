@@ -8,6 +8,7 @@ router = DefaultRouter()
 router.register(r'superadmins', views.SuperAdminViewSet, basename='superadmin')
 router.register(r'admins', views.AdminViewSet, basename='admin')
 router.register(r'employes', views.EmployeViewSet, basename='employe')
+router.register(r'departements', views.DepartementViewSet, basename='departement')
 router.register(r'postes', views.PosteViewSet, basename='poste')
 router.register(r'employe-profiles', views.EmployeProfileViewSet, basename='employe-profile')
 
