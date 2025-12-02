@@ -19,13 +19,13 @@ def send_otp_email(user):
     L'équipe DigiPlus HR
     """
     
-    # send_mail(
-    #     subject,
-    #     message,
-    #     settings.DEFAULT_FROM_EMAIL,
-    #     [user.email],
-    #     fail_silently=False,
-    # )
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
     
     return otp_code
 
