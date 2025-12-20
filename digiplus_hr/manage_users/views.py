@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
-from .models import OTP, Poste, Employe, DemandeConge, Notification
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit
 from rest_framework import generics, permissions
 from .serializers import DemandeCongeSerializer, NotificationSerializer
 from asgiref.sync import async_to_sync
@@ -13,12 +13,13 @@ from channels.layers import get_channel_layer
 from .serializers import (
     # Authentication
     LoginSerializer, VerifyOTPSerializer, ResendOTPSerializer, ChangePasswordSerializer,
+    ForgotPasswordRequestSerializer, ForgotPasswordVerifyOTPSerializer, ForgotPasswordResetSerializer,
     # Profile
     UserProfileSerializer, UserProfileUpdateSerializer,
     # Admin Management
     SuperAdminCreateSerializer, AdminCreateSerializer, EmployeCreateSerializer, UserListSerializer,
     # Postes and Employes
-    PosteSerializer, EmployeSerializer,DemandeCongeSerializer, NotificationSerializer
+    DepartementSerializer, PosteSerializer, EmployeSerializer, DemandeCongeSerializer, NotificationSerializer,DemandeCongeAuditSerializer
 )
 from .permissions import IsSuperAdmin, IsAdmin, IsAdminOrSuperAdmin, IsVerified
 from .utils import send_otp_email, send_credentials_email
@@ -167,6 +168,124 @@ def resend_otp_view(request):
             'error': f'Erreur lors de l\'envoi du code OTP: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_request_view(request):
+    """
+    Étape 1: Envoi du code OTP pour réinitialisation
+    """
+    serializer = ForgotPasswordRequestSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        return Response({
+            'message': 'Code de réinitialisation envoyé à votre email.',
+            'email': serializer.validated_data['email'],
+            'otp_code': serializer.validated_data.get('otp_code')  # À retirer en production
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_resend_otp_view(request):
+    """
+    Renvoyer le code OTP pour réinitialisation
+    """
+    serializer = ForgotPasswordRequestSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        return Response({
+            'message': 'Code de réinitialisation renvoyé à votre email.',
+            'email': serializer.validated_data['email'],
+            'otp_code': serializer.validated_data.get('otp_code')  # À retirer en production
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_verify_otp_view(request):
+    """
+    Étape 2: Vérification du code OTP
+    """
+    serializer = ForgotPasswordVerifyOTPSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    
+    email = serializer.validated_data['email']
+    otp_code = serializer.validated_data['otp_code']
+    
+    try:
+        user = User.objects.get(email=email)
+        otp = OTP.objects.filter(
+            user=user,
+            code=otp_code,
+            is_used=False
+        ).order_by('-created_at').first()
+        
+        if not otp:
+            return Response({
+                'error': 'Code OTP invalide ou expiré.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not otp.is_valid():
+            return Response({
+                'error': 'Code OTP expiré.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'message': 'Code OTP vérifié. Vous pouvez maintenant définir un nouveau mot de passe.',
+            'email': email
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response({
+            'error': 'Utilisateur non trouvé.'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_reset_view(request):
+    """
+    Étape 3: Réinitialisation du mot de passe
+    """
+    serializer = ForgotPasswordResetSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    
+    email = serializer.validated_data['email']
+    otp_code = serializer.validated_data['otp_code']
+    new_password = serializer.validated_data['new_password']
+    
+    try:
+        user = User.objects.get(email=email)
+        otp = OTP.objects.filter(
+            user=user,
+            code=otp_code,
+            is_used=False
+        ).order_by('-created_at').first()
+        
+        if not otp or not otp.is_valid():
+            return Response({
+                'error': 'Code OTP invalide ou expiré.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Changer le mot de passe
+        user.set_password(new_password)
+        user.save()
+        
+        # Marquer l'OTP comme utilisé
+        otp.is_used = True
+        otp.save()
+        
+        return Response({
+            'message': 'Mot de passe réinitialisé avec succès.'
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response({
+            'error': 'Utilisateur non trouvé.'
+        }, status=status.HTTP_404_NOT_FOUND)
+        
 # ==============================
 # PROFILE VIEWS
 # ==============================
@@ -410,15 +529,21 @@ class EmployeViewSet(viewsets.ModelViewSet):
             'user': UserListSerializer(employe).data
         })
 
-# ==============================
-# POSTE MANAGEMENT VIEWS
-# ==============================
+
+class DepartementViewSet(viewsets.ModelViewSet):
+    """
+    Gestion des départements
+    """
+    queryset = Departement.objects.all()
+    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    serializer_class = DepartementSerializer
+
 
 class PosteViewSet(viewsets.ModelViewSet):
     """
     Gestion des postes
     """
-    queryset = Poste.objects.all()
+    queryset = Poste.objects.select_related('departement').all()
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
     serializer_class = PosteSerializer
 
@@ -486,19 +611,43 @@ class DemandeCongeDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def perform_update(self, serializer):
         old_instance = self.get_object()
-        conge = serializer.save()
-        # Si le statut a changé, notifier l'employé
-        if old_instance.statut != conge.statut:
-            async_to_sync(channel_layer.group_send)(
-                f"user_{conge.employe.user.id}",
-                {
-                    "type": "send_notification",
-                    "content": {
-                        "titre": f"Demande {conge.statut}",
-                        "message": f"Votre demande du {conge.date_debut} au {conge.date_fin} a été {conge.statut}."
-                    }
-                }
-            )
+        new_statut = serializer.validated_data.get('statut', old_instance.statut)
+        
+        # Extraire les champs additionnels modifiés (tous les champs du serializer sauf statut)
+        extra_fields = {k: v for k, v in serializer.validated_data.items() if k != 'statut'}
+        
+        # Si le statut change vers 'approuve' ou 'rejete', utiliser les méthodes du modèle
+        # pour garantir persistance de la Notification et envoi WebSocket cohérents.
+        if old_instance.statut != new_statut:
+            if new_statut == 'approuve':
+                old_instance.approuver(admin=self.request.user, **extra_fields)
+                conge = old_instance
+            elif new_statut == 'rejete':
+                old_instance.rejeter(admin=self.request.user, **extra_fields)
+                conge = old_instance
+            else:
+                # Pour d'autres statuts, sauvegarder normalement et envoyer une notification générique
+                conge = serializer.save()
+                try:
+                    channel_layer = get_channel_layer()
+                    async_to_sync(channel_layer.group_send)(
+                        f"user_{conge.employe.user.id}",
+                        {
+                            "type": "send_notification",
+                            "content": {
+                                "titre": f"Demande {conge.statut}",
+                                "message": f"Votre demande du {conge.date_debut} au {conge.date_fin} a été {conge.statut}.",
+                                "demande_id": conge.id,
+                                "statut": conge.statut,
+                            }
+                        }
+                    )
+                except Exception:
+                    pass
+        else:
+            # Si statut ne change pas, sauvegarder les autres champs normalement
+            conge = serializer.save()
+
 
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
@@ -506,3 +655,81 @@ class NotificationListView(generics.ListAPIView):
 
     def get_queryset(self):
         return Notification.objects.filter(demande_conge__employe__user=self.request.user).order_by('-date_envoi')
+
+
+class AdminDemandesListView(generics.ListAPIView):
+    """
+    Endpoint pour les admins: voir TOUTES les demandes de congé
+    GET /api/management/demandes/
+    """
+    serializer_class = DemandeCongeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Seulement les admins peuvent voir toutes les demandes
+        if self.request.user.is_admin or self.request.user.is_superadmin:
+            # Optionnel: filtrer par statut si ?statut=en_attente
+            statut = self.request.query_params.get('statut', None)
+            if statut:
+                return DemandeConge.objects.filter(statut=statut).order_by('-created_at')
+            return DemandeConge.objects.all().order_by('-created_at')
+        
+        # Sinon, vide
+        return DemandeConge.objects.none()
+
+
+class EmployeDemandesListView(generics.ListAPIView):
+    """
+    Endpoint pour les employés: voir ses propres demandes de congé
+    GET /api/users/mes-demandes/
+    """
+    serializer_class = DemandeCongeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # L'employé voit seulement ses demandes
+        if hasattr(self.request.user, 'employe'):
+            return DemandeConge.objects.filter(employe__user=self.request.user).order_by('-created_at')
+        return DemandeConge.objects.none()
+
+
+class NotificationMarkAsReadView(generics.UpdateAPIView):
+    """
+    Endpoint pour marquer une notification comme lue
+    PATCH /api/notifications/{id}/mark-read/
+    """
+    serializer_class = NotificationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    lookup_field = 'pk'
+    
+    def get_queryset(self):
+        # L'utilisateur peut marquer comme lue seulement ses propres notifications
+        return Notification.objects.filter(demande_conge__employe__user=self.request.user)
+    
+    def partial_update(self, request, *args, **kwargs):
+        notification = self.get_object()
+        notification.lu = True
+        notification.save()
+        
+        serializer = self.get_serializer(notification)
+        return Response({
+            'status': 'success',
+            'message': 'Notification marquée comme lue',
+            'notification': serializer.data
+        })
+
+
+class AdminAuditListView(generics.ListAPIView):
+    """
+    Endpoint pour voir l'historique des approbations/rejets
+    GET /api/management/audit/
+    """
+   
+    serializer_class = DemandeCongeAuditSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Seulement les admins peuvent voir l'audit
+        if self.request.user.is_admin or self.request.user.is_superadmin:
+            return DemandeCongeAudit.objects.all().order_by('-date_action')
+        return DemandeCongeAudit.objects.none()
