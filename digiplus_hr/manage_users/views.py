@@ -13,6 +13,7 @@ from channels.layers import get_channel_layer
 from .serializers import (
     # Authentication
     LoginSerializer, VerifyOTPSerializer, ResendOTPSerializer, ChangePasswordSerializer,
+    ForgotPasswordRequestSerializer, ForgotPasswordVerifyOTPSerializer, ForgotPasswordResetSerializer,
     # Profile
     UserProfileSerializer, UserProfileUpdateSerializer,
     # Admin Management
@@ -167,6 +168,124 @@ def resend_otp_view(request):
             'error': f'Erreur lors de l\'envoi du code OTP: {str(e)}'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_request_view(request):
+    """
+    Étape 1: Envoi du code OTP pour réinitialisation
+    """
+    serializer = ForgotPasswordRequestSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        return Response({
+            'message': 'Code de réinitialisation envoyé à votre email.',
+            'email': serializer.validated_data['email'],
+            'otp_code': serializer.validated_data.get('otp_code')  # À retirer en production
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_resend_otp_view(request):
+    """
+    Renvoyer le code OTP pour réinitialisation
+    """
+    serializer = ForgotPasswordRequestSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        return Response({
+            'message': 'Code de réinitialisation renvoyé à votre email.',
+            'email': serializer.validated_data['email'],
+            'otp_code': serializer.validated_data.get('otp_code')  # À retirer en production
+        }, status=status.HTTP_200_OK)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_verify_otp_view(request):
+    """
+    Étape 2: Vérification du code OTP
+    """
+    serializer = ForgotPasswordVerifyOTPSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    
+    email = serializer.validated_data['email']
+    otp_code = serializer.validated_data['otp_code']
+    
+    try:
+        user = User.objects.get(email=email)
+        otp = OTP.objects.filter(
+            user=user,
+            code=otp_code,
+            is_used=False
+        ).order_by('-created_at').first()
+        
+        if not otp:
+            return Response({
+                'error': 'Code OTP invalide ou expiré.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not otp.is_valid():
+            return Response({
+                'error': 'Code OTP expiré.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({
+            'message': 'Code OTP vérifié. Vous pouvez maintenant définir un nouveau mot de passe.',
+            'email': email
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response({
+            'error': 'Utilisateur non trouvé.'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def forgot_password_reset_view(request):
+    """
+    Étape 3: Réinitialisation du mot de passe
+    """
+    serializer = ForgotPasswordResetSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    
+    email = serializer.validated_data['email']
+    otp_code = serializer.validated_data['otp_code']
+    new_password = serializer.validated_data['new_password']
+    
+    try:
+        user = User.objects.get(email=email)
+        otp = OTP.objects.filter(
+            user=user,
+            code=otp_code,
+            is_used=False
+        ).order_by('-created_at').first()
+        
+        if not otp or not otp.is_valid():
+            return Response({
+                'error': 'Code OTP invalide ou expiré.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Changer le mot de passe
+        user.set_password(new_password)
+        user.save()
+        
+        # Marquer l'OTP comme utilisé
+        otp.is_used = True
+        otp.save()
+        
+        return Response({
+            'message': 'Mot de passe réinitialisé avec succès.'
+        }, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        return Response({
+            'error': 'Utilisateur non trouvé.'
+        }, status=status.HTTP_404_NOT_FOUND)
+        
 # ==============================
 # PROFILE VIEWS
 # ==============================

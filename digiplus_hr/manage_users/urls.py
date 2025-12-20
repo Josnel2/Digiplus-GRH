@@ -18,6 +18,12 @@ urlpatterns = [
     path('verify-otp', views.verify_otp_view, name='verify_otp'),
     path('resend-otp', views.resend_otp_view, name='resend_otp'),
     path('token/refresh', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Réinitialisation mot de passe
+    path('forgot-password/request/', views.forgot_password_request_view, name='forgot-password-request'),
+    path('forgot-password/resend-otp/', views.forgot_password_resend_otp_view, name='forgot-password-resend-otp'),
+    path('forgot-password/verify-otp/', views.forgot_password_verify_otp_view, name='forgot-password-verify-otp'),
+    path('forgot-password/reset/', views.forgot_password_reset_view, name='forgot-password-reset'),
     
     # Profil utilisateur
     path('profile', views.get_profile_view, name='profile'),
