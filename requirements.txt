@@ -8,3 +8,4 @@ gunicorn
 channels
 channels-redis
 websockets
+daphne
