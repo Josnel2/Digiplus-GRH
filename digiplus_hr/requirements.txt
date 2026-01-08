@@ -13,3 +13,4 @@ gunicorn
 dj-database-url==2.1.0
 daphne==4.1.0
 whitenoise==6.8.1
+psycopg2-binary
