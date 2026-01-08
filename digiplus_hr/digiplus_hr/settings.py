@@ -144,12 +144,21 @@ CORS_ALLOW_HEADERS = [
 # En production, mettez False et spécifiez les origines
 CORS_ALLOW_ALL_ORIGINS = config('CORS_ALLOW_ALL_ORIGINS', default=False, cast=bool)
 
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = 'smtp.gmail.com'
+# EMAIL_PORT = 587
+# EMAIL_USE_TLS = True
+# EMAIL_HOST_USER = 'albanpombombe@gmail.com'
+# EMAIL_HOST_PASSWORD = 'reincxepxrjuoerw'
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_HOST = 'smtp.sendgrid.net'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'albanpombombe@gmail.com'
-EMAIL_HOST_PASSWORD = 'reincxepxrjuoerw'
+EMAIL_HOST_USER = 'apikey'
+EMAIL_HOST_PASSWORD = config('SENDGRID_API_KEY')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='alban212004@gmail.com')
+print("🚀 MODE PRODUCTION - SendGrid configuré")
 
 # Durée de validité de l'OTP (en minutes)
 OTP_EXPIRY_MINUTES = 5
