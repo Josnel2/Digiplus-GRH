@@ -1,14 +1,19 @@
 import os
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.auth import AuthMiddlewareStack
 from django.core.asgi import get_asgi_application
-import manage_users.routing  # On va créer ce fichier
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'digiplus_hr.settings')
 
+# Initialize Django ASGI application early to ensure the AppRegistry
+# is populated before importing code that may import ORM models.
+django_asgi_app = get_asgi_application()
+
+from channels.routing import ProtocolTypeRouter, URLRouter
+from manage_users.middleware import JwtAuthMiddleware
+import manage_users.routing
+
 application = ProtocolTypeRouter({
-    "http": get_asgi_application(),  # HTTP classique
-    "websocket": AuthMiddlewareStack(
+    "http": django_asgi_app,
+    "websocket": JwtAuthMiddleware(
         URLRouter(
             manage_users.routing.websocket_urlpatterns
         )
