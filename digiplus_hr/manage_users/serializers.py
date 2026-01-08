@@ -22,6 +22,50 @@ class VerifyOTPSerializer(serializers.Serializer):
 class ResendOTPSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
 
+class ForgotPasswordRequestSerializer(serializers.Serializer):
+    """Étape 1: Demande de réinitialisation"""
+    email = serializers.EmailField()
+    
+    def validate(self, attrs):
+        from .utils import send_otp_email
+        from django.contrib.auth import get_user_model
+        
+        User = get_user_model()
+        email = attrs.get('email')
+        
+        try:
+            user = User.objects.get(email=email)
+            
+            # Supprimer les anciens OTP de cet utilisateur
+            OTP.objects.filter(user=user, is_used=False).delete()
+            
+            # Générer et envoyer le nouveau OTP
+            otp_code = send_otp_email(user, purpose='password_reset')
+            
+            # Stocker le code OTP dans attrs pour le retourner (dev only)
+            attrs['otp_code'] = otp_code
+            attrs['user'] = user
+            
+            return attrs
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Aucun utilisateur trouvé avec cette adresse email.")
+
+class ForgotPasswordVerifyOTPSerializer(serializers.Serializer):
+    """Étape 2: Vérification OTP"""
+    email = serializers.EmailField()
+    otp_code = serializers.CharField(max_length=6)
+class ForgotPasswordResetSerializer(serializers.Serializer):
+    """Étape 3: Nouveau mot de passe"""
+    email = serializers.EmailField()
+    otp_code = serializers.CharField(max_length=6)
+    new_password = serializers.CharField(min_length=8)
+    confirm_password = serializers.CharField()
+    
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Les mots de passe ne correspondent pas")
+        return data
+
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(required=True, write_only=True)
     new_password = serializers.CharField(required=True, write_only=True, validators=[validate_password])
