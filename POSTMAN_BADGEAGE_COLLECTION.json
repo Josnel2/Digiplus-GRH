@@ -1,0 +1,390 @@
+{
+  "info": {
+    "name": "Gestion du Badgeage (Pointage) par QR Code",
+    "description": "Tests complets du système de badgeage avec QR codes",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Authentification",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('access_token', jsonData.access);",
+                  "    console.log('Token sauvegardé');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"chef.it@example.com\",\n  \"password\": \"pass123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. QR Code Management",
+      "item": [
+        {
+          "name": "GET - Liste des QR Codes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/code-qr/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "code-qr", ""]
+            }
+          }
+        },
+        {
+          "name": "POST - Créer un QR Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('code_qr_id', jsonData.id);",
+                  "    pm.environment.set('code_unique', jsonData.code_unique);",
+                  "    console.log('QR Code créé: ' + jsonData.code_unique);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employe\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/code-qr/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "code-qr", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Badgeage (Pointage)",
+      "item": [
+        {
+          "name": "POST - Scanner QR Code (Arrivée)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Badgeage contient type arrivee', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.badgeage.type).to.equal('arrivee');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_qr\": \"{{code_unique}}\",\n  \"type\": \"arrivee\",\n  \"latitude\": 48.8566,\n  \"longitude\": 2.3522,\n  \"device_info\": \"iPhone 12\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "POST - Scanner QR Code (Début Pause)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_qr\": \"{{code_unique}}\",\n  \"type\": \"pause_debut\",\n  \"latitude\": 48.8566,\n  \"longitude\": 2.3522\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "POST - Scanner QR Code (Fin Pause)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_qr\": \"{{code_unique}}\",\n  \"type\": \"pause_fin\",\n  \"latitude\": 48.8566,\n  \"longitude\": 2.3522\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "POST - Scanner QR Code (Départ)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_qr\": \"{{code_unique}}\",\n  \"type\": \"depart\",\n  \"latitude\": 48.8566,\n  \"longitude\": 2.3522\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "GET - Badgeages du Jour",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/jour-actuel/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "jour-actuel", ""]
+            }
+          }
+        },
+        {
+          "name": "GET - Liste Complète des Badgeages",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", ""]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Présences",
+      "item": [
+        {
+          "name": "GET - Liste des Présences",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/presences/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "presences", ""]
+            }
+          }
+        },
+        {
+          "name": "GET - Présences de l'Employé Actuel",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/presences/employe-actuel/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "presences", "employe-actuel", ""]
+            }
+          }
+        },
+        {
+          "name": "GET - Présences du Mois",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/presences/mois/?annee=2025&mois=11",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "presences", "mois", ""],
+              "query": [
+                {
+                  "key": "annee",
+                  "value": "2025"
+                },
+                {
+                  "key": "mois",
+                  "value": "11"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Rapports de Présence",
+      "item": [
+        {
+          "name": "GET - Liste des Rapports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/rapports-presence/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "rapports-presence", ""]
+            }
+          }
+        },
+        {
+          "name": "GET - Rapports de l'Employé Actuel",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/users/rapports-presence/employe-actuel/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "rapports-presence", "employe-actuel", ""]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "localhost:8000"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "code_qr_id",
+      "value": ""
+    },
+    {
+      "key": "code_unique",
+      "value": ""
+    }
+  ]
+}
