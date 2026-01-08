@@ -9,6 +9,4 @@ channels
 channels-redis
 redis
 websockets
-gunicorn
-dj-database-url==2.1.0
-daphne==4.1.0
+daphne

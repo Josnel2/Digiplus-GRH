@@ -79,15 +79,32 @@ class OTP(models.Model):
     class Meta:
         ordering = ['-created_at']
 
-class Poste(models.Model):
-    titre = models.CharField(max_length=100)
+class Departement(models.Model):
+    nom = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True, null=True)
-    salaire_de_base = models.DecimalField(max_digits=10, decimal_places=2)
+    chef_departement = models.OneToOneField('Employe', on_delete=models.SET_NULL, null=True, blank=True, related_name='departement_manage')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
-        return self.titre
+        return self.nom
+    
+    class Meta:
+        ordering = ['nom']
+
+class Poste(models.Model):
+    titre = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    salaire_de_base = models.DecimalField(max_digits=10, decimal_places=2)
+    departement = models.ForeignKey(Departement, on_delete=models.CASCADE, related_name='postes')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"{self.titre} ({self.departement.nom})"
+    
+    class Meta:
+        ordering = ['departement', 'titre']
 
 class Employe(models.Model):
     STATUT_CHOICES = [
@@ -133,10 +150,12 @@ class DemandeConge(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def approuver(self, **extra_fields):
+    def approuver(self, admin=None, raison='', **extra_fields):
         """Approuver la demande de congé et créer notification persistante + temps réel.
         
         Args:
+            admin: L'utilisateur admin qui approuve (pour audit)
+            raison: Raison optionnelle de l'approbation
             **extra_fields: champs additionnels à mettre à jour (ex: description)
         """
         self.statut = 'approuve'
@@ -145,11 +164,21 @@ class DemandeConge(models.Model):
                 setattr(self, key, value)
         self.save()
         
+        # Créer notification pour l'employé
         Notification.objects.create(
             demande_conge=self,
             titre='Congé approuvé',
             message=f'Votre demande de congé du {self.date_debut} au {self.date_fin} a été approuvée.'
         )
+        
+        # Créer audit log
+        if admin:
+            DemandeCongeAudit.objects.create(
+                demande_conge=self,
+                admin=admin,
+                action='approuve',
+                raison=raison
+            )
         
         # Envoi notification temps réel via Channels au propriétaire
         try:
@@ -170,10 +199,12 @@ class DemandeConge(models.Model):
             # Ne pas faire échouer la logique principale si Channels n'est pas configuré
             pass
 
-    def rejeter(self, **extra_fields):
+    def rejeter(self, admin=None, raison='', **extra_fields):
         """Rejeter la demande de congé et créer notification persistante + temps réel.
         
         Args:
+            admin: L'utilisateur admin qui rejette (pour audit)
+            raison: Raison du rejet
             **extra_fields: champs additionnels à mettre à jour (ex: description)
         """
         self.statut = 'rejete'
@@ -182,11 +213,25 @@ class DemandeConge(models.Model):
                 setattr(self, key, value)
         self.save()
         
+        # Créer notification pour l'employé
+        message = f'Votre demande de congé du {self.date_debut} au {self.date_fin} a été rejetée.'
+        if raison:
+            message += f'\n\nRaison: {raison}'
+        
         Notification.objects.create(
             demande_conge=self,
             titre='Congé rejeté',
-            message=f'Votre demande de congé du {self.date_debut} au {self.date_fin} a été rejetée.'
+            message=message
         )
+        
+        # Créer audit log
+        if admin:
+            DemandeCongeAudit.objects.create(
+                demande_conge=self,
+                admin=admin,
+                action='rejete',
+                raison=raison
+            )
         
         # Envoi notification temps réel via Channels au propriétaire
         try:
@@ -197,7 +242,7 @@ class DemandeConge(models.Model):
                     "type": "send_notification",
                     "content": {
                         "titre": "Congé rejeté",
-                        "message": f"Votre demande du {self.date_debut} au {self.date_fin} a été rejetée.",
+                        "message": f"Votre demande du {self.date_debut} au {self.date_fin} a été rejetée." + (f"\n\nRaison: {raison}" if raison else ""),
                         "demande_id": self.id,
                         "statut": self.statut,
                     }
@@ -220,4 +265,25 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"Notification: {self.titre} pour {self.demande_conge.employe.matricule}"
+
+
+class DemandeCongeAudit(models.Model):
+    """Traçabilité des actions admin sur les demandes de congé"""
+    ACTION_CHOICES = [
+        ('approuve', 'Approuvée'),
+        ('rejete', 'Rejetée'),
+        ('modifiee', 'Modifiée'),
+    ]
+    
+    demande_conge = models.ForeignKey(DemandeConge, on_delete=models.CASCADE, related_name='audit_logs')
+    admin = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='demandes_audit')
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    raison = models.TextField(blank=True, null=True)  # Raison du rejet
+    date_action = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-date_action']
+    
+    def __str__(self):
+        return f"{self.demande_conge.employe.matricule} - {self.action} par {self.admin.email}"
 
