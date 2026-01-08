@@ -4,4 +4,3 @@ django-cors-headers
 djangorestframework-simplejwt
 psycopg2-binary
 python-decouple
-gunicorn
