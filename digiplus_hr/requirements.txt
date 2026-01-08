@@ -9,7 +9,6 @@ channels
 channels-redis
 redis
 websockets
-daphne==4.1.0
 whitenoise==6.8.1
 psycopg2-binary
 gunicorn
