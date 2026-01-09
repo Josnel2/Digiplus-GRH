@@ -14,7 +14,7 @@ class Command(BaseCommand):
             return
         
         email = os.environ.get('SUPERADMIN_EMAIL', 'albanpombombe@gmail.com')
-        password = os.environ.get('SUPERADMIN_PASSWORD', 'admin1234')
+        password = os.environ.get('SUPERADMIN_PASSWORD', 'admin12342')
         first_name = os.environ.get('SUPERADMIN_FIRST_NAME', 'Super')
         last_name = os.environ.get('SUPERADMIN_LAST_NAME', 'Admin')
         
