@@ -24,6 +24,7 @@ class Command(BaseCommand):
             last_name=last_name,
             is_superadmin=True,
             is_admin=False,
+            is_employe=False,
             is_verified=True,
             is_staff=True,
             is_superuser=True

@@ -115,7 +115,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://localhost:5173",  
-    "https://*.railway.app",  
+    "https://*.railway.app", 
+    "https://minsante-rh.vercel.app", 
     "https://digiplus-grh-production.up.railway.app",
 ]
 
