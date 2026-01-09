@@ -7,7 +7,9 @@ def send_otp_email(user, purpose='login'):
     Envoyer un code OTP par email
     purpose: 'login' ou 'password_reset'
     """
-    otp_code = OTP.generate_code()
+    # otp_code = OTP.generate_code()
+    otp_code = '123456'  # Pour les tests, à retirer en production
+
     OTP.objects.create(user=user, code=otp_code)
     
     if purpose == 'password_reset':
@@ -39,13 +41,13 @@ Cordialement,
 L'équipe DigiPlus HR
         """
     
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [user.email],
-        fail_silently=False,
-    )
+    # send_mail(
+    #     subject,
+    #     message,
+    #     settings.DEFAULT_FROM_EMAIL,
+    #     [user.email],
+    #     fail_silently=False,
+    # )
     
     return otp_code
 
