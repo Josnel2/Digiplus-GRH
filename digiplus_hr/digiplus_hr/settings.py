@@ -100,10 +100,11 @@ else:
 REDIS_URL = config('REDIS_URL', default='redis://localhost:6379')
 
 CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [REDIS_URL],
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [config('REDIS_URL', default='redis://localhost:6379')],
+            "symmetric_encryption_keys": [SECRET_KEY],
         },
     },
 }
@@ -116,8 +117,11 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://localhost:5173",  
-    "https://*.railway.app",  
+    "https://*.railway.app", 
+    "https://minsante-rh.vercel.app", 
     "https://digiplus-grh-production.up.railway.app",
+    "wss://digiplus-grh-production.up.railway.app",
+    "ws://digiplus-grh-production.up.railway.app",
 ]
 
 CORS_ALLOW_METHODS = [
