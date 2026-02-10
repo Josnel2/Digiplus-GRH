@@ -11,13 +11,16 @@ router.register(r'employes', views.EmployeViewSet, basename='employe')
 router.register(r'departements', views.DepartementViewSet, basename='departement')
 router.register(r'postes', views.PosteViewSet, basename='poste')
 router.register(r'employe-profiles', views.EmployeProfileViewSet, basename='employe-profile')
+router.register(r'code-qr', views.CodeQRViewSet, basename='code-qr')
+router.register(r'badgeages', views.BadgeageViewSet, basename='badgeage')
+router.register(r'presences', views.PresenceViewSet, basename='presence')
 
 urlpatterns = [
     # Authentification
-    path('login', views.login_view, name='login'),
-    path('verify-otp', views.verify_otp_view, name='verify_otp'),
-    path('resend-otp', views.resend_otp_view, name='resend_otp'),
-    path('token/refresh', TokenRefreshView.as_view(), name='token_refresh'),
+    path('login/', views.login_view, name='login'),
+    path('verify-otp/', views.verify_otp_view, name='verify_otp'),
+    path('resend-otp/', views.resend_otp_view, name='resend_otp'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # Réinitialisation mot de passe
     path('forgot-password/request/', views.forgot_password_request_view, name='forgot-password-request'),
@@ -26,7 +29,7 @@ urlpatterns = [
     path('forgot-password/reset/', views.forgot_password_reset_view, name='forgot-password-reset'),
     
     # Profil utilisateur
-    path('profile', views.get_profile_view, name='profile'),
+    path('profile/', views.get_profile_view, name='profile'),
     path('profile/update', views.update_profile_view, name='update_profile'),
     path('change-password', views.change_password_view, name='change_password'),
     # Demandes de congé et notifications

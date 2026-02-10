@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence
 
 
 User = get_user_model()
@@ -75,6 +75,19 @@ class ChangePasswordSerializer(serializers.Serializer):
         if attrs['new_password'] != attrs['confirm_password']:
             raise serializers.ValidationError({"new_password": "Les mots de passe ne correspondent pas."})
         return attrs
+
+
+class BadgeageScannerSerializer(serializers.Serializer):
+    code_qr = serializers.CharField(required=True)
+    type = serializers.ChoiceField(choices=[
+        ('arrivee', 'Arrivée'),
+        ('depart', 'Départ'),
+        ('pause_debut', 'Début de pause'),
+        ('pause_fin', 'Fin de pause'),
+    ])
+    latitude = serializers.FloatField(required=False, allow_null=True)
+    longitude = serializers.FloatField(required=False, allow_null=True)
+    device_info = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 # ==============================
 # Profile Serializers
@@ -243,6 +256,26 @@ class EmployeSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Employe
+        fields = '__all__'
+
+
+class CodeQRSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CodeQR
+        fields = '__all__'
+        read_only_fields = ['code_unique', 'qr_code_image', 'date_generation']
+
+
+class BadgeageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Badgeage
+        fields = '__all__'
+        read_only_fields = ['datetime', 'date']
+
+
+class PresenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Presence
         fields = '__all__'
 
 

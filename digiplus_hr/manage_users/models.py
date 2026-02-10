@@ -287,3 +287,109 @@ class DemandeCongeAudit(models.Model):
     def __str__(self):
         return f"{self.demande_conge.employe.matricule} - {self.action} par {self.admin.email}"
 
+
+class CodeQR(models.Model):
+    code_unique = models.CharField(max_length=100, unique=True, db_index=True)
+    qr_code_image = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
+    date_generation = models.DateTimeField(auto_now_add=True)
+    date_expiration = models.DateField(blank=True, null=True)
+    actif = models.BooleanField(default=True)
+    employe = models.OneToOneField(Employe, on_delete=models.CASCADE, related_name='code_qr')
+
+    class Meta:
+        ordering = ['-date_generation']
+
+    @staticmethod
+    def generate_unique_code():
+        return str(random.randint(1000000000, 9999999999))
+
+    def __str__(self):
+        return f"QR {self.employe.matricule} ({self.code_unique})"
+
+
+class Badgeage(models.Model):
+    TYPE_CHOICES = [
+        ('arrivee', 'Arrivée'),
+        ('depart', 'Départ'),
+        ('pause_debut', 'Début de pause'),
+        ('pause_fin', 'Fin de pause'),
+    ]
+
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name='badgeages')
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    datetime = models.DateTimeField(auto_now_add=True)
+    date = models.DateField(auto_now_add=True, db_index=True)
+    localisation_latitude = models.FloatField(blank=True, null=True)
+    localisation_longitude = models.FloatField(blank=True, null=True)
+    adresse_localisation = models.CharField(max_length=255, blank=True, null=True)
+    device_info = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        ordering = ['-datetime']
+        indexes = [
+            models.Index(fields=['employe', 'date'], name='mu_emp_date_bdg_idx'),
+            models.Index(fields=['date'], name='manage_user_badge_date_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.employe.matricule} - {self.type} - {self.datetime}"
+
+
+class Presence(models.Model):
+    STATUT_CHOICES = [
+        ('present', 'Présent'),
+        ('absent', 'Absent'),
+        ('retard', 'En retard'),
+        ('conge', 'Congé'),
+        ('repos', 'Jour de repos'),
+    ]
+
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name='presences')
+    date = models.DateField(db_index=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='absent')
+    heure_arrivee = models.TimeField(blank=True, null=True)
+    heure_depart = models.TimeField(blank=True, null=True)
+    duree_travail_minutes = models.IntegerField(default=0)
+    nb_pauses = models.IntegerField(default=0)
+    duree_pauses_minutes = models.IntegerField(default=0)
+    remarques = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-date']
+        unique_together = (('employe', 'date'),)
+        indexes = [
+            models.Index(fields=['employe', 'date'], name='manage_user_employe_date_idx'),
+            models.Index(fields=['date', 'statut'], name='manage_user_date_statut_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.employe.matricule} - {self.date} - {self.statut}"
+
+
+class RapportPresence(models.Model):
+    employe = models.ForeignKey(Employe, on_delete=models.CASCADE, related_name='rapports_presence')
+    annee = models.IntegerField()
+    mois = models.IntegerField()
+    total_jours_travail = models.IntegerField(default=0)
+    total_jours_present = models.IntegerField(default=0)
+    total_jours_absent = models.IntegerField(default=0)
+    total_jours_retard = models.IntegerField(default=0)
+    total_jours_conge = models.IntegerField(default=0)
+    total_jours_repos = models.IntegerField(default=0)
+    total_heures_travail = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_heures_pauses = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    observations = models.TextField(blank=True, null=True)
+    generated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-annee', '-mois']
+        unique_together = (('employe', 'annee', 'mois'),)
+        indexes = [
+            models.Index(fields=['employe', 'annee', 'mois'], name='manage_user_rapport_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.employe.matricule} - {self.mois}/{self.annee}"
+

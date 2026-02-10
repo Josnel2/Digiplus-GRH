@@ -5,7 +5,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
-from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit
+import datetime
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence
 from rest_framework import generics, permissions
 from .serializers import DemandeCongeSerializer, NotificationSerializer
 from asgiref.sync import async_to_sync
@@ -19,7 +20,8 @@ from .serializers import (
     # Admin Management
     SuperAdminCreateSerializer, AdminCreateSerializer, EmployeCreateSerializer, UserListSerializer,
     # Postes and Employes
-    DepartementSerializer, PosteSerializer, EmployeSerializer, DemandeCongeSerializer, NotificationSerializer,DemandeCongeAuditSerializer
+    DepartementSerializer, PosteSerializer, EmployeSerializer, DemandeCongeSerializer, NotificationSerializer,DemandeCongeAuditSerializer,
+    CodeQRSerializer, BadgeageSerializer, PresenceSerializer, BadgeageScannerSerializer
 )
 from .permissions import IsSuperAdmin, IsAdmin, IsAdminOrSuperAdmin, IsVerified
 from .utils import send_otp_email, send_credentials_email
@@ -573,6 +575,130 @@ class EmployeProfileViewSet(viewsets.ModelViewSet):
                 {'error': 'Profil employé non trouvé'}, 
                 status=status.HTTP_404_NOT_FOUND
             )
+
+
+class CodeQRViewSet(viewsets.ModelViewSet):
+    queryset = CodeQR.objects.select_related('employe', 'employe__user').all()
+    permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
+    serializer_class = CodeQRSerializer
+
+    def perform_create(self, serializer):
+        code_unique = serializer.validated_data.get('code_unique')
+        if not code_unique:
+            code_unique = CodeQR.generate_unique_code()
+            while CodeQR.objects.filter(code_unique=code_unique).exists():
+                code_unique = CodeQR.generate_unique_code()
+        serializer.save(code_unique=code_unique)
+
+
+class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Badgeage.objects.select_related('employe', 'employe__user').all()
+    permission_classes = [IsAuthenticated]
+    serializer_class = BadgeageSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if getattr(self.request.user, 'is_employe', False):
+            try:
+                return qs.filter(employe=self.request.user.employe)
+            except Employe.DoesNotExist:
+                return qs.none()
+        if getattr(self.request.user, 'is_admin', False) or getattr(self.request.user, 'is_superadmin', False):
+            return qs
+        return qs.none()
+
+    @action(detail=False, methods=['post'], url_path='scanner', url_name='scanner')
+    def scanner(self, request):
+        serializer = BadgeageScannerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        code_qr_value = serializer.validated_data['code_qr']
+        badge_type = serializer.validated_data['type']
+
+        try:
+            code_qr = CodeQR.objects.select_related('employe', 'employe__user').get(code_unique=code_qr_value, actif=True)
+        except CodeQR.DoesNotExist:
+            return Response({'error': 'QR code invalide ou inactif.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if code_qr.date_expiration and code_qr.date_expiration < timezone.now().date():
+            return Response({'error': 'QR code expiré.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        employe = code_qr.employe
+
+        now = timezone.now()
+        badgeage = Badgeage.objects.create(
+            employe=employe,
+            type=badge_type,
+            localisation_latitude=serializer.validated_data.get('latitude'),
+            localisation_longitude=serializer.validated_data.get('longitude'),
+            device_info=serializer.validated_data.get('device_info'),
+        )
+
+        presence, _ = Presence.objects.get_or_create(
+            employe=employe,
+            date=now.date(),
+            defaults={'statut': 'absent'},
+        )
+
+        if badge_type == 'arrivee':
+            if presence.heure_arrivee is None:
+                presence.heure_arrivee = now.time()
+            presence.statut = 'present'
+
+        if badge_type == 'pause_debut':
+            presence.nb_pauses = (presence.nb_pauses or 0) + 1
+
+        if badge_type == 'pause_fin':
+            last_pause_start = Badgeage.objects.filter(
+                employe=employe,
+                date=now.date(),
+                type='pause_debut',
+                datetime__lte=badgeage.datetime,
+            ).order_by('-datetime').first()
+            if last_pause_start:
+                delta = badgeage.datetime - last_pause_start.datetime
+                added_minutes = max(0, int(delta.total_seconds() // 60))
+                presence.duree_pauses_minutes = (presence.duree_pauses_minutes or 0) + added_minutes
+
+        if badge_type == 'depart':
+            presence.heure_depart = now.time()
+            if presence.heure_arrivee is not None:
+                arrivee_dt = timezone.make_aware(datetime.datetime.combine(now.date(), presence.heure_arrivee))
+                depart_dt = timezone.make_aware(datetime.datetime.combine(now.date(), presence.heure_depart))
+                total_minutes = max(0, int((depart_dt - arrivee_dt).total_seconds() // 60))
+                pauses_minutes = int(presence.duree_pauses_minutes or 0)
+                presence.duree_travail_minutes = max(0, total_minutes - pauses_minutes)
+            presence.statut = 'present'
+
+        presence.save()
+
+        return Response(BadgeageSerializer(badgeage).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='jour-actuel', url_name='jour-actuel')
+    def jour_actuel(self, request):
+        today = timezone.now().date()
+        qs = self.get_queryset().filter(date=today)
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            return self.get_paginated_response(BadgeageSerializer(page, many=True).data)
+        return Response(BadgeageSerializer(qs, many=True).data)
+
+
+class PresenceViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Presence.objects.select_related('employe', 'employe__user').all()
+    permission_classes = [IsAuthenticated]
+    serializer_class = PresenceSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if getattr(self.request.user, 'is_employe', False):
+            try:
+                return qs.filter(employe=self.request.user.employe)
+            except Employe.DoesNotExist:
+                return qs.none()
+        if getattr(self.request.user, 'is_admin', False) or getattr(self.request.user, 'is_superadmin', False):
+            return qs
+        return qs.none()
 
 
 channel_layer = get_channel_layer()
