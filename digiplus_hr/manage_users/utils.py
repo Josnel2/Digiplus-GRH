@@ -67,10 +67,10 @@ def send_credentials_email(user, password):
     L'équipe DigiPlus HR
     """
     
-    # send_mail(
-    #     subject,
-    #     message,
-    #     settings.DEFAULT_FROM_EMAIL,
-    #     [user.email],
-    #     fail_silently=False,
-    # )
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+        fail_silently=False,
+    )
