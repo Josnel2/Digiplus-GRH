@@ -590,6 +590,36 @@ class CodeQRViewSet(viewsets.ModelViewSet):
                 code_unique = CodeQR.generate_unique_code()
         serializer.save(code_unique=code_unique)
 
+    @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
+    def me(self, request):
+        try:
+            employe = request.user.employe
+        except Employe.DoesNotExist:
+            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
+        code_qr = CodeQR.objects.filter(employe=employe, actif=True).order_by('-date_generation').first()
+        if not code_qr:
+            code_unique = CodeQR.generate_unique_code()
+            while CodeQR.objects.filter(code_unique=code_unique).exists():
+                code_unique = CodeQR.generate_unique_code()
+            code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
+
+        return Response(CodeQRSerializer(code_qr).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='me/regenerate', permission_classes=[IsAuthenticated])
+    def regenerate(self, request):
+        try:
+            employe = request.user.employe
+        except Employe.DoesNotExist:
+            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
+        CodeQR.objects.filter(employe=employe, actif=True).update(actif=False)
+        code_unique = CodeQR.generate_unique_code()
+        while CodeQR.objects.filter(code_unique=code_unique).exists():
+            code_unique = CodeQR.generate_unique_code()
+        code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
+        return Response(CodeQRSerializer(code_qr).data, status=status.HTTP_201_CREATED)
+
 
 class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Badgeage.objects.select_related('employe', 'employe__user').all()
@@ -626,6 +656,44 @@ class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
         employe = code_qr.employe
 
         now = timezone.now()
+
+        todays_badges = Badgeage.objects.filter(employe=employe, date=now.date()).order_by('datetime')
+        has_arrivee = todays_badges.filter(type='arrivee').exists()
+        has_depart = todays_badges.filter(type='depart').exists()
+        pause_debut_count = todays_badges.filter(type='pause_debut').count()
+        pause_fin_count = todays_badges.filter(type='pause_fin').count()
+        pause_in_progress = pause_debut_count > pause_fin_count
+
+        if badge_type == 'arrivee':
+            if has_depart:
+                return Response({'error': "Déjà pointé 'depart' aujourd'hui."}, status=status.HTTP_400_BAD_REQUEST)
+            if has_arrivee:
+                return Response({'error': "Déjà pointé 'arrivee' aujourd'hui."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if badge_type == 'pause_debut':
+            if not has_arrivee:
+                return Response({'error': "Impossible de commencer une pause avant l'arrivée."}, status=status.HTTP_400_BAD_REQUEST)
+            if has_depart:
+                return Response({'error': "Impossible de commencer une pause après le départ."}, status=status.HTTP_400_BAD_REQUEST)
+            if pause_in_progress:
+                return Response({'error': "Une pause est déjà en cours."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if badge_type == 'pause_fin':
+            if not has_arrivee:
+                return Response({'error': "Impossible de terminer une pause avant l'arrivée."}, status=status.HTTP_400_BAD_REQUEST)
+            if has_depart:
+                return Response({'error': "Impossible de terminer une pause après le départ."}, status=status.HTTP_400_BAD_REQUEST)
+            if not pause_in_progress:
+                return Response({'error': "Aucune pause en cours à terminer."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if badge_type == 'depart':
+            if not has_arrivee:
+                return Response({'error': "Impossible de pointer le départ avant l'arrivée."}, status=status.HTTP_400_BAD_REQUEST)
+            if has_depart:
+                return Response({'error': "Déjà pointé 'depart' aujourd'hui."}, status=status.HTTP_400_BAD_REQUEST)
+            if pause_in_progress:
+                return Response({'error': "Impossible de pointer le départ pendant une pause (terminez la pause)."}, status=status.HTTP_400_BAD_REQUEST)
+
         badgeage = Badgeage.objects.create(
             employe=employe,
             type=badge_type,
