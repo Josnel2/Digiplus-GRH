@@ -38,5 +38,4 @@ class JwtAuthMiddleware:
                 scope["user"] = AnonymousUser()
         except Exception:
              scope["user"] = AnonymousUser()
-        
         return await self.app(scope, receive, send)
