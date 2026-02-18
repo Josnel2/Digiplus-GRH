@@ -30,7 +30,7 @@ class TestBadgeagePresence(APITestCase):
         scanner_url = reverse("badgeage-scanner")
 
         def scan(badge_type):
-            payload = {"code_qr": code_qr.code_unique, "type": badge_type}
+            payload = {"user_id": user.id, "type": badge_type}
             return self.client.post(scanner_url, payload, format="json")
 
         resp = scan("arrivee")

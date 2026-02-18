@@ -78,8 +78,7 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 class BadgeageScannerSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField(required=False)
-    code_qr = serializers.CharField(required=False, allow_blank=True)
+    user_id = serializers.IntegerField(required=True)
     type = serializers.ChoiceField(choices=[
         ('arrivee', 'Arrivée'),
         ('depart', 'Départ'),
@@ -89,13 +88,6 @@ class BadgeageScannerSerializer(serializers.Serializer):
     latitude = serializers.FloatField(required=False, allow_null=True)
     longitude = serializers.FloatField(required=False, allow_null=True)
     device_info = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-
-    def validate(self, attrs):
-        user_id = attrs.get('user_id')
-        code_qr = (attrs.get('code_qr') or '').strip()
-        if not user_id and not code_qr:
-            raise serializers.ValidationError("Vous devez fournir 'user_id' ou 'code_qr'.")
-        return attrs
 
 # ==============================
 # Profile Serializers

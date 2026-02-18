@@ -592,8 +592,22 @@ class CodeQRViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='me', permission_classes=[IsAuthenticated])
     def me(self, request):
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+            return Response({'error': "Champ requis: 'user_id'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if getattr(request.user, 'is_employe', False) and int(user_id) != int(request.user.id):
+            return Response({'error': "Vous ne pouvez récupérer que votre propre QR."}, status=status.HTTP_403_FORBIDDEN)
+
+        if not ((getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(user_id) == int(request.user.id)):
+            return Response({'error': "Vous n'êtes pas autorisé à récupérer le QR de cet utilisateur."}, status=status.HTTP_403_FORBIDDEN)
+
         try:
-            employe = request.user.employe
+            target_user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            employe = target_user.employe
         except Employe.DoesNotExist:
             return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -608,8 +622,22 @@ class CodeQRViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='me/regenerate', permission_classes=[IsAuthenticated])
     def regenerate(self, request):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': "Champ requis: 'user_id'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if getattr(request.user, 'is_employe', False) and int(user_id) != int(request.user.id):
+            return Response({'error': "Vous ne pouvez régénérer que votre propre QR."}, status=status.HTTP_403_FORBIDDEN)
+
+        if not ((getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(user_id) == int(request.user.id)):
+            return Response({'error': "Vous n'êtes pas autorisé à régénérer le QR de cet utilisateur."}, status=status.HTTP_403_FORBIDDEN)
+
         try:
-            employe = request.user.employe
+            target_user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            employe = target_user.employe
         except Employe.DoesNotExist:
             return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -671,35 +699,25 @@ class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = BadgeageScannerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_id = serializer.validated_data.get('user_id')
-        code_qr_value = (serializer.validated_data.get('code_qr') or '').strip()
+        user_id = serializer.validated_data['user_id']
         badge_type = serializer.validated_data['type']
 
-        employe = None
-        if user_id:
-            if getattr(request.user, 'is_employe', False) and int(user_id) != int(request.user.id):
-                return Response({'error': "Vous ne pouvez pointer que pour votre propre compte."}, status=status.HTTP_403_FORBIDDEN)
-            if not (getattr(request.user, 'is_employe', False) or getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)):
-                return Response({'error': "Vous n'êtes pas autorisé à pointer."}, status=status.HTTP_403_FORBIDDEN)
-            if (getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(user_id) == int(request.user.id):
-                try:
-                    target_user = User.objects.get(pk=user_id)
-                except User.DoesNotExist:
-                    return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-                try:
-                    employe = target_user.employe
-                except Employe.DoesNotExist:
-                    return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
-        else:
-            try:
-                code_qr = CodeQR.objects.select_related('employe', 'employe__user').get(code_unique=code_qr_value, actif=True)
-            except CodeQR.DoesNotExist:
-                return Response({'error': 'QR code invalide ou inactif.'}, status=status.HTTP_400_BAD_REQUEST)
+        if getattr(request.user, 'is_employe', False) and int(user_id) != int(request.user.id):
+            return Response({'error': "Vous ne pouvez pointer que pour votre propre compte."}, status=status.HTTP_403_FORBIDDEN)
+        if not (getattr(request.user, 'is_employe', False) or getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)):
+            return Response({'error': "Vous n'êtes pas autorisé à pointer."}, status=status.HTTP_403_FORBIDDEN)
 
-            if code_qr.date_expiration and code_qr.date_expiration < timezone.now().date():
-                return Response({'error': 'QR code expiré.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not ((getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(user_id) == int(request.user.id)):
+            return Response({'error': "Vous n'êtes pas autorisé à pointer pour cet utilisateur."}, status=status.HTTP_403_FORBIDDEN)
 
-            employe = code_qr.employe
+        try:
+            target_user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        try:
+            employe = target_user.employe
+        except Employe.DoesNotExist:
+            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
 
         now = timezone.now()
 

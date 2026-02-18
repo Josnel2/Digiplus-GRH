@@ -21,7 +21,7 @@ def print_response(method, endpoint, status, data):
 # Step 1: Login
 print_header("STEP 1: Authentification")
 login_response = requests.post(
-    f"{BASE_URL}/login",
+    f"{BASE_URL}/login/",
     json={"email": "chef.it@example.com", "password": "pass123"}
 )
 
@@ -39,6 +39,8 @@ headers = {
     "Content-Type": "application/json"
 }
 
+USER_ID = 2  # ID du User (employé)
+
 # Step 2: Lister les QR codes
 print_header("STEP 2: Liste des QR Codes (GET)")
 response = requests.get(f"{BASE_URL}/code-qr/", headers=headers)
@@ -49,9 +51,7 @@ if response.status_code == 200 and response.json().get('results'):
     print(f"✓ QR Code trouvé: {code_qr}")
 else:
     print("⚠️  Pas de QR code trouvé, création...")
-    # Créer un QR code
-    new_qr = {"employe": 2}  # Employe ID 2 (Jean Dupont)
-    response = requests.post(f"{BASE_URL}/code-qr/", json=new_qr, headers=headers)
+    response = requests.post(f"{BASE_URL}/code-qr/me/regenerate/", json={"user_id": USER_ID}, headers=headers)
     if response.status_code in [200, 201]:
         code_qr = response.json().get('code_unique')
         print(f"✓ QR Code créé: {code_qr}")
@@ -62,7 +62,7 @@ else:
 # Step 3: Scanner le QR code (enregistrer un badgeage)
 print_header("STEP 3: Scanner QR Code - Arrivée (POST)")
 scanner_data = {
-    "code_qr": code_qr,
+    "user_id": USER_ID,
     "type": "arrivee",
     "latitude": 48.8566,
     "longitude": 2.3522,
@@ -74,7 +74,7 @@ print_response("POST", "/badgeages/scanner/", response.status_code, response.jso
 # Step 4: Badgeage - Début de pause
 print_header("STEP 4: Badgeage - Début de Pause")
 pause_debut = {
-    "code_qr": code_qr,
+    "user_id": USER_ID,
     "type": "pause_debut",
     "latitude": 48.8566,
     "longitude": 2.3522
@@ -85,7 +85,7 @@ print_response("POST", "/badgeages/scanner/", response.status_code, response.jso
 # Step 5: Badgeage - Fin de pause
 print_header("STEP 5: Badgeage - Fin de Pause")
 pause_fin = {
-    "code_qr": code_qr,
+    "user_id": USER_ID,
     "type": "pause_fin",
     "latitude": 48.8566,
     "longitude": 2.3522
@@ -96,7 +96,7 @@ print_response("POST", "/badgeages/scanner/", response.status_code, response.jso
 # Step 6: Badgeage - Départ
 print_header("STEP 6: Badgeage - Départ")
 depart = {
-    "code_qr": code_qr,
+    "user_id": USER_ID,
     "type": "depart",
     "latitude": 48.8566,
     "longitude": 2.3522
