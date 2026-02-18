@@ -620,6 +620,35 @@ class CodeQRViewSet(viewsets.ModelViewSet):
         code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
         return Response(CodeQRSerializer(code_qr).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'], url_path='for-user', permission_classes=[IsAuthenticated, IsAdminOrSuperAdmin])
+    def for_user(self, request):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({'error': "Champ requis: 'user_id'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            target_user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            employe = target_user.employe
+        except Employe.DoesNotExist:
+            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
+        regenerate = bool(request.data.get('regenerate', True))
+        if regenerate:
+            CodeQR.objects.filter(employe=employe, actif=True).update(actif=False)
+
+        code_qr = CodeQR.objects.filter(employe=employe, actif=True).order_by('-date_generation').first()
+        if not code_qr:
+            code_unique = CodeQR.generate_unique_code()
+            while CodeQR.objects.filter(code_unique=code_unique).exists():
+                code_unique = CodeQR.generate_unique_code()
+            code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
+
+        return Response(CodeQRSerializer(code_qr).data, status=status.HTTP_201_CREATED)
+
 
 class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Badgeage.objects.select_related('employe', 'employe__user').all()
@@ -642,18 +671,35 @@ class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = BadgeageScannerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        code_qr_value = serializer.validated_data['code_qr']
+        user_id = serializer.validated_data.get('user_id')
+        code_qr_value = (serializer.validated_data.get('code_qr') or '').strip()
         badge_type = serializer.validated_data['type']
 
-        try:
-            code_qr = CodeQR.objects.select_related('employe', 'employe__user').get(code_unique=code_qr_value, actif=True)
-        except CodeQR.DoesNotExist:
-            return Response({'error': 'QR code invalide ou inactif.'}, status=status.HTTP_400_BAD_REQUEST)
+        employe = None
+        if user_id:
+            if getattr(request.user, 'is_employe', False) and int(user_id) != int(request.user.id):
+                return Response({'error': "Vous ne pouvez pointer que pour votre propre compte."}, status=status.HTTP_403_FORBIDDEN)
+            if not (getattr(request.user, 'is_employe', False) or getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)):
+                return Response({'error': "Vous n'êtes pas autorisé à pointer."}, status=status.HTTP_403_FORBIDDEN)
+            if (getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(user_id) == int(request.user.id):
+                try:
+                    target_user = User.objects.get(pk=user_id)
+                except User.DoesNotExist:
+                    return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+                try:
+                    employe = target_user.employe
+                except Employe.DoesNotExist:
+                    return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            try:
+                code_qr = CodeQR.objects.select_related('employe', 'employe__user').get(code_unique=code_qr_value, actif=True)
+            except CodeQR.DoesNotExist:
+                return Response({'error': 'QR code invalide ou inactif.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        if code_qr.date_expiration and code_qr.date_expiration < timezone.now().date():
-            return Response({'error': 'QR code expiré.'}, status=status.HTTP_400_BAD_REQUEST)
+            if code_qr.date_expiration and code_qr.date_expiration < timezone.now().date():
+                return Response({'error': 'QR code expiré.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        employe = code_qr.employe
+            employe = code_qr.employe
 
         now = timezone.now()
 
