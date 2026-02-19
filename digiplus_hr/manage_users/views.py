@@ -6,6 +6,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model, authenticate
 from django.utils import timezone
 import datetime
+import uuid
+import io
+import qrcode
+import hashlib
+from django.core.files.base import ContentFile
+from django.http import FileResponse
 from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence
 from rest_framework import generics, permissions
 from .serializers import DemandeCongeSerializer, NotificationSerializer
@@ -582,6 +588,48 @@ class CodeQRViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsAdminOrSuperAdmin]
     serializer_class = CodeQRSerializer
 
+    def _get_or_create_employe(self, target_user):
+        try:
+            return target_user.employe, False
+        except Employe.DoesNotExist:
+            if not getattr(target_user, 'is_employe', False):
+                target_user.is_employe = True
+                target_user.save(update_fields=['is_employe'])
+
+            matricule = f"AUTO{target_user.id}-{uuid.uuid4().hex[:8].upper()}"
+            while Employe.objects.filter(matricule=matricule).exists():
+                matricule = f"AUTO{target_user.id}-{uuid.uuid4().hex[:8].upper()}"
+
+            employe = Employe.objects.create(
+                user=target_user,
+                matricule=matricule,
+                date_embauche=timezone.now().date(),
+                statut='actif',
+            )
+            return employe, True
+
+    def _ensure_qr_image(self, code_qr):
+        if code_qr.qr_code_image:
+            return
+
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(code_qr.code_unique)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+
+        code_hash = hashlib.sha256(code_qr.code_unique.encode('utf-8')).hexdigest()[:16]
+        filename = f"qr_{code_qr.employe_id}_{code_hash}.png"
+        code_qr.qr_code_image.save(filename, ContentFile(buffer.read()), save=True)
+
     def perform_create(self, serializer):
         code_unique = serializer.validated_data.get('code_unique')
         if not code_unique:
@@ -606,10 +654,8 @@ class CodeQRViewSet(viewsets.ModelViewSet):
             target_user = User.objects.get(pk=user_id)
         except User.DoesNotExist:
             return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-        try:
-            employe = target_user.employe
-        except Employe.DoesNotExist:
-            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
+        employe, created_profile = self._get_or_create_employe(target_user)
 
         code_qr = CodeQR.objects.filter(employe=employe, actif=True).order_by('-date_generation').first()
         if not code_qr:
@@ -618,7 +664,19 @@ class CodeQRViewSet(viewsets.ModelViewSet):
                 code_unique = CodeQR.generate_unique_code()
             code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
 
-        return Response(CodeQRSerializer(code_qr).data, status=status.HTTP_200_OK)
+        self._ensure_qr_image(code_qr)
+
+        data = CodeQRSerializer(code_qr).data
+        if created_profile and int(target_user.id) == int(request.user.id):
+            refresh = RefreshToken.for_user(target_user)
+            data = {
+                'code_qr': data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }
+            }
+        return Response(data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='me/regenerate', permission_classes=[IsAuthenticated])
     def regenerate(self, request):
@@ -636,17 +694,28 @@ class CodeQRViewSet(viewsets.ModelViewSet):
             target_user = User.objects.get(pk=user_id)
         except User.DoesNotExist:
             return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-        try:
-            employe = target_user.employe
-        except Employe.DoesNotExist:
-            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
+        employe, created_profile = self._get_or_create_employe(target_user)
 
         CodeQR.objects.filter(employe=employe, actif=True).update(actif=False)
         code_unique = CodeQR.generate_unique_code()
         while CodeQR.objects.filter(code_unique=code_unique).exists():
             code_unique = CodeQR.generate_unique_code()
         code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
-        return Response(CodeQRSerializer(code_qr).data, status=status.HTTP_201_CREATED)
+
+        self._ensure_qr_image(code_qr)
+
+        data = CodeQRSerializer(code_qr).data
+        if created_profile and int(target_user.id) == int(request.user.id):
+            refresh = RefreshToken.for_user(target_user)
+            data = {
+                'code_qr': data,
+                'tokens': {
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                }
+            }
+        return Response(data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='for-user', permission_classes=[IsAuthenticated, IsAdminOrSuperAdmin])
     def for_user(self, request):
@@ -659,10 +728,7 @@ class CodeQRViewSet(viewsets.ModelViewSet):
         except User.DoesNotExist:
             return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
 
-        try:
-            employe = target_user.employe
-        except Employe.DoesNotExist:
-            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+        employe, _created_profile = self._get_or_create_employe(target_user)
 
         regenerate = bool(request.data.get('regenerate', True))
         if regenerate:
@@ -675,7 +741,43 @@ class CodeQRViewSet(viewsets.ModelViewSet):
                 code_unique = CodeQR.generate_unique_code()
             code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
 
+        self._ensure_qr_image(code_qr)
+
         return Response(CodeQRSerializer(code_qr).data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='me/download', permission_classes=[IsAuthenticated])
+    def download(self, request):
+        user_id = request.query_params.get('user_id')
+        if not user_id:
+            return Response({'error': "Champ requis: 'user_id'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if getattr(request.user, 'is_employe', False) and int(user_id) != int(request.user.id):
+            return Response({'error': "Vous ne pouvez télécharger que votre propre QR."}, status=status.HTTP_403_FORBIDDEN)
+
+        if not ((getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(user_id) == int(request.user.id)):
+            return Response({'error': "Vous n'êtes pas autorisé à télécharger le QR de cet utilisateur."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            target_user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        employe, _created_profile = self._get_or_create_employe(target_user)
+        code_qr = CodeQR.objects.filter(employe=employe, actif=True).order_by('-date_generation').first()
+        if not code_qr:
+            code_unique = CodeQR.generate_unique_code()
+            while CodeQR.objects.filter(code_unique=code_unique).exists():
+                code_unique = CodeQR.generate_unique_code()
+            code_qr = CodeQR.objects.create(employe=employe, code_unique=code_unique, actif=True)
+
+        self._ensure_qr_image(code_qr)
+
+        if not code_qr.qr_code_image:
+            return Response({'error': "Impossible de générer l'image du QR code."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        response = FileResponse(code_qr.qr_code_image.open('rb'), content_type='image/png')
+        response['Content-Disposition'] = f'attachment; filename="qr_{user_id}.png"'
+        return response
 
 
 class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
@@ -867,7 +969,7 @@ class DemandeCongeDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = DemandeCongeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def perform_update(self, serializer):
+def perform_update(self, serializer):
         old_instance = self.get_object()
         new_statut = serializer.validated_data.get('statut', old_instance.statut)
         

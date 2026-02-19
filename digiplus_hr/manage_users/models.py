@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils import timezone
 from datetime import timedelta
 import random
+import secrets
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 
@@ -289,7 +290,7 @@ class DemandeCongeAudit(models.Model):
 
 
 class CodeQR(models.Model):
-    code_unique = models.CharField(max_length=100, unique=True, db_index=True)
+    code_unique = models.CharField(max_length=512, unique=True, db_index=True)
     qr_code_image = models.ImageField(upload_to='qr_codes/', blank=True, null=True)
     date_generation = models.DateTimeField(auto_now_add=True)
     date_expiration = models.DateField(blank=True, null=True)
@@ -301,7 +302,7 @@ class CodeQR(models.Model):
 
     @staticmethod
     def generate_unique_code():
-        return str(random.randint(1000000000, 9999999999))
+        return secrets.token_urlsafe(256)
 
     def __str__(self):
         return f"QR {self.employe.matricule} ({self.code_unique})"
