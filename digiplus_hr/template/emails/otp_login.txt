@@ -1,0 +1,8 @@
+Bonjour {{ first_name }},
+
+Votre code de vérification OTP est : {{ otp_code }}
+
+Ce code expirera dans {{ expiry_minutes }} minutes.
+
+Cordialement,
+L'équipe MINSANTE

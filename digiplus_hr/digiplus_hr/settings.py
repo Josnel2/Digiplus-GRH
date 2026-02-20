@@ -61,7 +61,7 @@ ROOT_URLCONF = 'digiplus_hr.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / "template"],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -155,6 +155,9 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'albanpombombe@gmail.com'
 EMAIL_HOST_PASSWORD = 'reincxepxrjuoerw'
+
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+PORTAL_URL = config('PORTAL_URL', default='[URL_DU_PORTAL]')
 
 # Durée de validité de l'OTP (en minutes)
 OTP_EXPIRY_MINUTES = 5
