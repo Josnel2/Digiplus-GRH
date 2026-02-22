@@ -43,4 +43,8 @@ urlpatterns = [
     path('', include(router.urls)),
     path('demandes/', views.AdminDemandesListView.as_view(), name='admin-demandes-list'),
     path('audit/', views.AdminAuditListView.as_view(), name='admin-audit-list'),
+
+    #formation
+    path('formations/', views.FormationListCreateView.as_view(), name='formation-list-create'),
+    path('formations/<int:pk>/', views.FormationDetailView.as_view(), name='formation-detail'),
 ]
