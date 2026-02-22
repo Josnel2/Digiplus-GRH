@@ -1,3 +1,4 @@
+from django.shortcuts import get_object_or_404
 from rest_framework import status, generics, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
@@ -8,11 +9,11 @@ from django.utils import timezone
 import datetime
 import uuid
 import io
-import qrcode
+import qr_codes
 import hashlib
 from django.core.files.base import ContentFile
 from django.http import FileResponse
-from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence, Formation
 from rest_framework import generics, permissions
 from .serializers import DemandeCongeSerializer, NotificationSerializer
 from asgiref.sync import async_to_sync
@@ -27,7 +28,9 @@ from .serializers import (
     SuperAdminCreateSerializer, AdminCreateSerializer, EmployeCreateSerializer, UserListSerializer,
     # Postes and Employes
     DepartementSerializer, PosteSerializer, EmployeSerializer, DemandeCongeSerializer, NotificationSerializer,DemandeCongeAuditSerializer,
-    CodeQRSerializer, BadgeageSerializer, PresenceSerializer, BadgeageScannerSerializer
+    CodeQRSerializer, BadgeageSerializer, PresenceSerializer, BadgeageScannerSerializer, 
+    #Formation
+    FormationSerializer
 )
 from .permissions import IsSuperAdmin, IsAdmin, IsAdminOrSuperAdmin, IsVerified
 from .utils import send_otp_email, send_credentials_email
@@ -612,9 +615,9 @@ class CodeQRViewSet(viewsets.ModelViewSet):
         if code_qr.qr_code_image:
             return
 
-        qr = qrcode.QRCode(
+        qr = qr_codes.QRCode(
             version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            error_correction=qr_codes.constants.ERROR_CORRECT_M,
             box_size=10,
             border=4,
         )
@@ -1093,3 +1096,66 @@ class AdminAuditListView(generics.ListAPIView):
         if self.request.user.is_admin or self.request.user.is_superadmin:
             return DemandeCongeAudit.objects.all().order_by('-date_action')
         return DemandeCongeAudit.objects.none()
+    
+
+
+#Formation
+class FormationListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /formations/   → Lister toutes les formations
+    POST /formations/   → Créer une formation
+    """
+
+    def get(self, request):
+        formations = Formation.objects.all()
+        serializer = FormationSerializer(formations, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = FormationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class FormationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    GET    /formations/<id>/  → Récupérer une formation
+    PUT    /formations/<id>/  → Modifier entièrement une formation
+    PATCH  /formations/<id>/  → Modifier partiellement une formation
+    DELETE /formations/<id>/  → Supprimer une formation
+    """
+
+    def get_object(self, pk):
+        return get_object_or_404(Formation, pk=pk)
+
+    def get(self, request, pk):
+        formation = self.get_object(pk)
+        serializer = FormationSerializer(formation)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        formation = self.get_object(pk)
+        serializer = FormationSerializer(formation, data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def patch(self, request, pk):
+        formation = self.get_object(pk)
+        serializer = FormationSerializer(formation, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def delete(self, request, pk):
+        formation = self.get_object(pk)
+        formation.delete()
+        return Response(
+            {"message": f"La formation '{formation.titre}' a été supprimée avec succès."},
+            status=status.HTTP_200_OK
+        )
+    
