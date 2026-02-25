@@ -801,25 +801,40 @@ class BadgeageViewSet(viewsets.ReadOnlyModelViewSet):
         serializer = BadgeageScannerSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user_id = serializer.validated_data['user_id']
         badge_type = serializer.validated_data['type']
+        user_id = serializer.validated_data.get('user_id')
+        code_unique = serializer.validated_data.get('code_unique')
 
-        if getattr(request.user, 'is_employe', False) and int(user_id) != int(request.user.id):
-            return Response({'error': "Vous ne pouvez pointer que pour votre propre compte."}, status=status.HTTP_403_FORBIDDEN)
         if not (getattr(request.user, 'is_employe', False) or getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)):
             return Response({'error': "Vous n'êtes pas autorisé à pointer."}, status=status.HTTP_403_FORBIDDEN)
 
-        if not ((getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(user_id) == int(request.user.id)):
-            return Response({'error': "Vous n'êtes pas autorisé à pointer pour cet utilisateur."}, status=status.HTTP_403_FORBIDDEN)
+        employe = None
+        target_user = None
 
-        try:
-            target_user = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
-            return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
-        try:
-            employe = target_user.employe
-        except Employe.DoesNotExist:
-            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+        if code_unique:
+            code_qr = CodeQR.objects.filter(code_unique=code_unique, actif=True).select_related('employe', 'employe__user').first()
+            if not code_qr:
+                return Response({'error': 'QR code invalide ou inactif.'}, status=status.HTTP_400_BAD_REQUEST)
+            employe = code_qr.employe
+            target_user = getattr(employe, 'user', None)
+            if not target_user:
+                return Response({'error': 'Utilisateur introuvable pour ce QR.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            if not user_id:
+                return Response({'error': "Fournir 'code_unique' ou 'user_id'."}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                target_user = User.objects.get(pk=user_id)
+            except User.DoesNotExist:
+                return Response({'error': 'Utilisateur introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+            try:
+                employe = target_user.employe
+            except Employe.DoesNotExist:
+                return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if getattr(request.user, 'is_employe', False) and int(target_user.id) != int(request.user.id):
+            return Response({'error': "Vous ne pouvez pointer que pour votre propre compte."}, status=status.HTTP_403_FORBIDDEN)
+        if not ((getattr(request.user, 'is_admin', False) or getattr(request.user, 'is_superadmin', False)) or int(target_user.id) == int(request.user.id)):
+            return Response({'error': "Vous n'êtes pas autorisé à pointer pour cet utilisateur."}, status=status.HTTP_403_FORBIDDEN)
 
         now = timezone.now()
 

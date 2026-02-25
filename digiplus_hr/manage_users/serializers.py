@@ -78,7 +78,8 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 
 class BadgeageScannerSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField(required=True)
+    user_id = serializers.IntegerField(required=False)
+    code_unique = serializers.CharField(required=False, allow_blank=False)
     type = serializers.ChoiceField(choices=[
         ('arrivee', 'Arrivée'),
         ('depart', 'Départ'),
@@ -88,6 +89,13 @@ class BadgeageScannerSerializer(serializers.Serializer):
     latitude = serializers.FloatField(required=False, allow_null=True)
     longitude = serializers.FloatField(required=False, allow_null=True)
     device_info = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, attrs):
+        user_id = attrs.get('user_id')
+        code_unique = attrs.get('code_unique')
+        if not user_id and not code_unique:
+            raise serializers.ValidationError("Fournir 'code_unique' ou 'user_id'.")
+        return attrs
 
 # ==============================
 # Profile Serializers

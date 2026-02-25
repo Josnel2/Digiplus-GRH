@@ -207,9 +207,10 @@
 
  - `POST /api/users/badgeages/scanner/`
 
- Le payload (minimum) attend:
+ Le payload (minimum) attend **au choix**:
 
- - `user_id`: l'utilisateur pour lequel on pointe
+ - `code_unique`: valeur contenue dans le QR code (scan réel)
+ - ou `user_id`: fallback compatibilité
  - `type`: `arrivee` | `depart` | `pause_debut` | `pause_fin`
 
  Règles côté serveur (anti-erreurs / anti-doublons):
