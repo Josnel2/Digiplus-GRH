@@ -1,0 +1,456 @@
+{
+  "info": {
+    "name": "Digiplus GRH – QR Code, Badgeage & Présences",
+    "description": "Flux complet : Authentification → Génération QR → Scan (Arrivée / Pause / Départ) → Consultation Présences",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "refresh_token", "value": "", "type": "string" },
+    { "key": "code_unique", "value": "", "type": "string" },
+    { "key": "user_id", "value": "1", "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "1. Authentification",
+      "item": [
+        {
+          "name": "POST – Login (email + password)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "pm.environment.set('user_email', json.email || '');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"motdepasse123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/login/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "login", ""]
+            }
+          }
+        },
+        {
+          "name": "POST – Vérifier OTP → obtenir tokens JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.tokens) {",
+                  "  pm.environment.set('access_token', json.tokens.access);",
+                  "  pm.environment.set('refresh_token', json.tokens.refresh);",
+                  "  pm.environment.set('user_id', json.user.id.toString());",
+                  "  console.log('✅ Tokens sauvegardés. user_id=' + json.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"otp_code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/verify-otp/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "verify-otp", ""]
+            }
+          }
+        },
+        {
+          "name": "POST – Rafraîchir le token JWT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.access) pm.environment.set('access_token', json.access);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/token/refresh/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "token", "refresh", ""]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "2. Génération QR Code",
+      "item": [
+        {
+          "name": "GET – Mon QR Code actif (employé ou admin par user_id)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var code = json.code_unique || (json.code_qr && json.code_qr.code_unique);",
+                  "if (code) {",
+                  "  pm.environment.set('code_unique', code);",
+                  "  console.log('✅ code_unique sauvegardé: ' + code);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/code-qr/me/?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "code-qr", "me", ""],
+              "query": [{ "key": "user_id", "value": "{{user_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "POST – Régénérer mon QR Code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "var code = json.code_unique || (json.code_qr && json.code_qr.code_unique);",
+                  "if (code) {",
+                  "  pm.environment.set('code_unique', code);",
+                  "  console.log('✅ Nouveau code_unique: ' + code);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": {{user_id}}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/code-qr/me/regenerate/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "code-qr", "me", "regenerate", ""]
+            }
+          }
+        },
+        {
+          "name": "POST – [ADMIN] Générer QR pour un employé",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var json = pm.response.json();",
+                  "if (json.code_unique) {",
+                  "  pm.environment.set('code_unique', json.code_unique);",
+                  "  console.log('✅ QR généré pour employé: ' + json.code_unique);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": {{user_id}},\n  \"regenerate\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/code-qr/for-user/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "code-qr", "for-user", ""]
+            }
+          }
+        },
+        {
+          "name": "GET – Télécharger l'image PNG du QR Code",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/code-qr/me/download/?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "code-qr", "me", "download", ""],
+              "query": [{ "key": "user_id", "value": "{{user_id}}" }]
+            }
+          }
+        },
+        {
+          "name": "GET – [ADMIN] Liste de tous les QR Codes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/code-qr/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "code-qr", ""]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "3. Badgeage – Scan & Pointage",
+      "item": [
+        {
+          "name": "POST – 📲 Scanner QR → ARRIVÉE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Statut 201 Créé', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Type = arrivee', function () {",
+                  "  pm.expect(pm.response.json().type).to.equal('arrivee');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_unique\": \"{{code_unique}}\",\n  \"type\": \"arrivee\",\n  \"latitude\": 3.8480,\n  \"longitude\": 11.5021,\n  \"device_info\": \"Chrome / Windows 11\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "POST – ☕ Scanner QR → DÉBUT DE PAUSE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Statut 201 Créé', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Type = pause_debut', function () {",
+                  "  pm.expect(pm.response.json().type).to.equal('pause_debut');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_unique\": \"{{code_unique}}\",\n  \"type\": \"pause_debut\",\n  \"latitude\": 3.8480,\n  \"longitude\": 11.5021,\n  \"device_info\": \"Chrome / Windows 11\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "POST – ✅ Scanner QR → FIN DE PAUSE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Statut 201 Créé', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Type = pause_fin', function () {",
+                  "  pm.expect(pm.response.json().type).to.equal('pause_fin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_unique\": \"{{code_unique}}\",\n  \"type\": \"pause_fin\",\n  \"latitude\": 3.8480,\n  \"longitude\": 11.5021,\n  \"device_info\": \"Chrome / Windows 11\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "POST – 🚪 Scanner QR → DÉPART",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Statut 201 Créé', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Type = depart', function () {",
+                  "  pm.expect(pm.response.json().type).to.equal('depart');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code_unique\": \"{{code_unique}}\",\n  \"type\": \"depart\",\n  \"latitude\": 3.8480,\n  \"longitude\": 11.5021,\n  \"device_info\": \"Chrome / Windows 11\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "POST – Scanner par user_id (sans QR scan physique)",
+          "_description": "Alternative : utiliser user_id directement au lieu du code_unique",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": {{user_id}},\n  \"type\": \"arrivee\",\n  \"latitude\": 3.8480,\n  \"longitude\": 11.5021,\n  \"device_info\": \"Application Mobile Android\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/scanner/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "scanner", ""]
+            }
+          }
+        },
+        {
+          "name": "GET – Badgeages du jour en cours",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/jour-actuel/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "jour-actuel", ""]
+            }
+          }
+        },
+        {
+          "name": "GET – Tous les badgeages",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", ""]
+            }
+          }
+        },
+        {
+          "name": "GET – Détail d'un badgeage par ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/badgeages/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "badgeages", "1", ""]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "4. Présences",
+      "item": [
+        {
+          "name": "GET – Liste de toutes les présences",
+          "_description": "Employé → ses présences seulement / Admin → toutes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/presences/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "presences", ""]
+            }
+          }
+        },
+        {
+          "name": "GET – Détail d'une présence par ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{access_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/users/presences/1/",
+              "host": ["{{base_url}}"],
+              "path": ["api", "users", "presences", "1", ""]
+            }
+          }
+        }
+      ]
+    }
+
+  ]
+}
