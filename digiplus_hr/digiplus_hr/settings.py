@@ -176,7 +176,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Digiplus GRH API',
+    'TITLE': 'MINSANTE-RH API',
     'DESCRIPTION': (
         'API de gestion des ressources humaines — Authentification, '
         'Employés, Départements, QR Code, Badgeage & Présences.'
