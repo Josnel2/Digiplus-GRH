@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'corsheaders',
     'manage_users',
     'channels',
-    'whitenoise.runserver_nostatic',  
+    'whitenoise.runserver_nostatic',
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -171,6 +172,35 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
     ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Digiplus GRH API',
+    'DESCRIPTION': (
+        'API de gestion des ressources humaines — Authentification, '
+        'Employés, Départements, QR Code, Badgeage & Présences.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SWAGGER_UI_SETTINGS': {
+        'persistAuthorization': True,
+        'displayRequestDuration': True,
+        'filter': True,
+    },
+    'SECURITY': [
+        {'BearerAuth': []}
+    ],
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'BearerAuth': {
+                'type': 'http',
+                'scheme': 'bearer',
+                'bearerFormat': 'JWT',
+            }
+        }
+    },
 }
 
 SIMPLE_JWT = {
