@@ -27,7 +27,7 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='https://pamel.pythonanywhere.com/').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='pamel.pythonanywhere.com,localhost,127.0.0.1,.railway.app,digiplus-grh-production.up.railway.app').split(',')
 
 
 # Application definition
