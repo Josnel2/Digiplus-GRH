@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'manage_users',
+    'manage_contrat',
     'channels',
     'whitenoise.runserver_nostatic',
     'drf_spectacular',
@@ -100,13 +101,13 @@ else:
     }
 
 # Redis/Channels configuration for Railway
-REDIS_URL = config('REDIS_URL', default='redis://localhost:6379')
+REDIS_URL = config('REDIS_URL')
 
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [config('REDIS_URL', default='redis://localhost:6379')],
+            "hosts": [config('REDIS_URL')],
             "symmetric_encryption_keys": [SECRET_KEY],
         },
     },
