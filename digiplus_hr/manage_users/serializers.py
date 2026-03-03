@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence, RapportPresence
 
 
 User = get_user_model()
@@ -284,6 +284,12 @@ class BadgeageSerializer(serializers.ModelSerializer):
 class PresenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Presence
+        fields = '__all__'
+
+
+class RapportPresenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RapportPresence
         fields = '__all__'
 
 
