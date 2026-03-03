@@ -12,7 +12,7 @@ import qrcode
 import hashlib
 from django.core.files.base import ContentFile
 from django.http import FileResponse
-from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence
+from .models import OTP, Departement, Poste, Employe, DemandeConge, Notification, DemandeCongeAudit, CodeQR, Badgeage, Presence, RapportPresence
 from rest_framework import generics, permissions
 from .serializers import DemandeCongeSerializer, NotificationSerializer
 from asgiref.sync import async_to_sync
@@ -27,7 +27,7 @@ from .serializers import (
     SuperAdminCreateSerializer, AdminCreateSerializer, EmployeCreateSerializer, UserListSerializer,
     # Postes and Employes
     DepartementSerializer, PosteSerializer, EmployeSerializer, DemandeCongeSerializer, NotificationSerializer,DemandeCongeAuditSerializer,
-    CodeQRSerializer, BadgeageSerializer, PresenceSerializer, BadgeageScannerSerializer
+    CodeQRSerializer, BadgeageSerializer, PresenceSerializer, RapportPresenceSerializer, BadgeageScannerSerializer
 )
 from .permissions import IsSuperAdmin, IsAdmin, IsAdminOrSuperAdmin, IsVerified
 from .utils import send_otp_email, send_credentials_email
@@ -948,6 +948,52 @@ class PresenceViewSet(viewsets.ReadOnlyModelViewSet):
         if getattr(self.request.user, 'is_admin', False) or getattr(self.request.user, 'is_superadmin', False):
             return qs
         return qs.none()
+
+class RapportPresenceViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = RapportPresence.objects.select_related('employe', 'employe__user').all()
+    permission_classes = [IsAuthenticated]
+    serializer_class = RapportPresenceSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+
+        annee = self.request.query_params.get('annee')
+        mois = self.request.query_params.get('mois')
+        employe_id = self.request.query_params.get('employe')
+
+        if getattr(self.request.user, 'is_employe', False):
+            try:
+                qs = qs.filter(employe=self.request.user.employe)
+            except Employe.DoesNotExist:
+                return qs.none()
+        elif getattr(self.request.user, 'is_admin', False) or getattr(self.request.user, 'is_superadmin', False):
+            if employe_id:
+                qs = qs.filter(employe_id=employe_id)
+        else:
+            return qs.none()
+
+        if annee:
+            qs = qs.filter(annee=annee)
+        if mois:
+            qs = qs.filter(mois=mois)
+
+        return qs
+
+    @action(detail=False, methods=['get'], url_path='employe-actuel', url_name='employe-actuel')
+    def employe_actuel(self, request):
+        if not getattr(request.user, 'is_employe', False):
+            return Response({'error': "Route reservée aux employés."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            employe = request.user.employe
+        except Employe.DoesNotExist:
+            return Response({'error': 'Profil employé non trouvé.'}, status=status.HTTP_404_NOT_FOUND)
+
+        qs = self.get_queryset().filter(employe=employe)
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        return Response(self.get_serializer(qs, many=True).data)
 
 
 channel_layer = get_channel_layer()

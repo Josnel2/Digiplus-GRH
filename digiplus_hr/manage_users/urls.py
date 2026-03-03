@@ -14,6 +14,7 @@ router.register(r'employe-profiles', views.EmployeProfileViewSet, basename='empl
 router.register(r'code-qr', views.CodeQRViewSet, basename='code-qr')
 router.register(r'badgeages', views.BadgeageViewSet, basename='badgeage')
 router.register(r'presences', views.PresenceViewSet, basename='presence')
+router.register(r'rapports-presence', views.RapportPresenceViewSet, basename='rapport-presence')
 
 urlpatterns = [
     # Authentification
