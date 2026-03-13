@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'manage_users',
     'manage_contrat',
+    'manage_ia',
     'channels',
     'whitenoise.runserver_nostatic',
     'drf_spectacular',
@@ -246,3 +247,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 AUTH_USER_MODEL = 'manage_users.User'
+
+# Configuration API DeepSeek
+DEEPSEEK_API_URL = config('DEEPSEEK_API_URL')
+

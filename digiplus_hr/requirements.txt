@@ -17,3 +17,13 @@ dj-database-url==2.1.0
 qrcode==7.4.2
 drf-spectacular
 reportlab==4.1.0
+
+# IA / DeepSeek / RAG dependencies
+requests
+openai
+langchain
+langchain-community
+langchain-text-splitters
+sentence-transformers
+faiss-cpu
+PyPDF2
