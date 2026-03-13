@@ -3,10 +3,9 @@ from django.conf import settings
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 FAISS_STORE_PATH = os.path.join(settings.BASE_DIR, "faiss_index")
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 # Initialisation différée pour ne pas bloquer au démarrage
 _embeddings = None
@@ -14,7 +13,7 @@ _embeddings = None
 def get_embeddings():
     global _embeddings
     if _embeddings is None:
-        _embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+        _embeddings = FastEmbedEmbeddings()
     return _embeddings
 
 def get_vector_store():

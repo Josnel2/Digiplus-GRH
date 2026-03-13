@@ -24,6 +24,6 @@ openai
 langchain
 langchain-community
 langchain-text-splitters
-sentence-transformers
+fastembed
 faiss-cpu
 PyPDF2

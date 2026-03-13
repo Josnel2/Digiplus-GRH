@@ -55,7 +55,7 @@ def ask_deepseek_chatbot(user, question):
 BASE TA RÉPONSE SUR CES DOCUMENTS SI PERTINENT. Si les documents ne contiennent pas la réponse, utilise tes connaissances générales ou transfère à un humain si c'est très spécifique.
 """
 
-    system_prompt = f"""Tu es l'assistant IA RH officiel du MINSANTE (Ministère de la Santé Publique du Cameroun), intégré à la plateforme Digiplus-GRH.
+    system_prompt = f"""Tu es l'assistant IA RH officiel du MINSANTE (Ministère de la Santé Publique du Cameroun), intégré à la plateforme MINSANTE-RH.
 Ton rôle est d'aider les employés avec leurs questions administratives, de congés, de règles internes, etc.
 Tu dois répondre de manière professionnelle, claire et concise.
 Voici les informations sur l'utilisateur actuel : {context}
