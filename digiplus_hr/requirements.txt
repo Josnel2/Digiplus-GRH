@@ -27,3 +27,6 @@ langchain-text-splitters
 fastembed
 faiss-cpu
 PyPDF2
+pandas
+scikit-learn
+joblib
