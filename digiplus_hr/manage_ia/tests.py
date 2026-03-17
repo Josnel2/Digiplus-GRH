@@ -2,11 +2,13 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from manage_users.models import Departement, Employe, Poste
+from manage_ia.services import call_deepseek_api
 
 User = get_user_model()
 
@@ -115,3 +117,16 @@ class ManageIATests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["departement_id"], 1)
+
+    @override_settings(DEEPSEEK_API_URL="test-api-key", DEEPSEEK_DEFAULT_MODEL="deepseek-chat")
+    @patch("manage_ia.services.requests.post")
+    def test_call_deepseek_api_uses_default_chat_model(self, mock_post):
+        mock_post.return_value.json.return_value = {
+            "choices": [{"message": {"content": "ok"}}]
+        }
+        mock_post.return_value.raise_for_status.return_value = None
+
+        result = call_deepseek_api([{"role": "user", "content": "Bonjour"}])
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(mock_post.call_args.kwargs["json"]["model"], "deepseek-chat")
