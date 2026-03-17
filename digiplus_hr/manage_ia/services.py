@@ -13,13 +13,15 @@ def call_deepseek_api(messages, temperature=0.7):
     if not api_key:
         raise ValueError("DEEPSEEK_API_URL n'est pas configuré dans settings.py.")
 
+    model_name = getattr(settings, 'DEEPSEEK_DEFAULT_MODEL', 'deepseek-chat')
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": "deepseek-chat",
+        "model": model_name,
         "messages": messages,
         "temperature": temperature
     }

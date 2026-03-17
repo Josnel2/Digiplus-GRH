@@ -250,4 +250,4 @@ AUTH_USER_MODEL = 'manage_users.User'
 
 # Configuration API DeepSeek
 DEEPSEEK_API_URL = config('DEEPSEEK_API_URL')
-
+DEEPSEEK_DEFAULT_MODEL = config('DEEPSEEK_DEFAULT_MODEL', default='deepseek-chat')
